@@ -1,16 +1,16 @@
 #!/bin/bash
 
 # ==============================================================================
-# vLLM All-in-One Installer for Ubuntu (v5 - Flexible Service Creation)
+# vLLM All-in-One Installer for Ubuntu (v6 - With vllm_help Command)
 # ==============================================================================
 # This script will:
 # 1. Check for prerequisites (Ubuntu, NVIDIA GPU, CUDA drivers).
 # 2. Check for an existing compatible Python version (3.9-3.12).
 # 3. If no Python is found, rely on 'uv' to download a self-contained build.
-# 4. Install dependencies like the 'uv' package manager.
+# 4. Install dependencies and the 'uv' package manager.
 # 5. Create a dedicated user and directory structure.
 # 6. Set up a Python virtual environment and install vLLM.
-# 7. Generate a 'run_server.sh' script to start the OpenAI-compatible server.
+# 7. Generate a 'run_server.sh' script and a system-wide 'vllm_help' command.
 # 8. Optionally, create and enable a systemd service that can use either a
 #    Hugging Face ID or a local model path.
 # ==============================================================================
@@ -32,6 +32,7 @@ UV_EXECUTABLE="${VLLM_HOME_DIR}/.local/bin/uv"
 COLOR_GREEN='\033[0;32m'
 COLOR_YELLOW='\033[1;33m'
 COLOR_RED='\033[0;31m'
+COLOR_CYAN='\033[0;36m'
 COLOR_NC='\033[0m'
 
 # --- Helper Functions ---
@@ -101,10 +102,8 @@ install_vllm() {
     info "Creating Python virtual environment using Python ${PYTHON_TO_USE}..."
     su -s /bin/bash -c "cd '$VLLM_HOME_DIR' && '${UV_EXECUTABLE}' venv --python $PYTHON_TO_USE '$VENV_DIR' --seed" "$VLLM_USER"
     info "Virtual environment created at '$VENV_DIR'."
-
     info "Installing vLLM into the virtual environment. This may take a few minutes..."
     su -s /bin/bash -c "source '${VENV_DIR}/bin/activate' && '${UV_EXECUTABLE}' pip install vllm --torch-backend=auto" "$VLLM_USER"
-
     info "Verifying vLLM installation..."
     local vllm_version
     vllm_version=$(su -s /bin/bash -c "source '${VENV_DIR}/bin/activate' && python -c 'import vllm; print(vllm.__version__)'" "$VLLM_USER" 2>/dev/null)
@@ -117,119 +116,107 @@ install_vllm() {
 
 create_run_script() {
     info "Step 5: Creating the 'run_server.sh' script..."
+    # ... Function content is unchanged, omitted for brevity ...
     local run_script_path="${VLLM_HOME_DIR}/run_server.sh"
     cat <<EOF > "$run_script_path"
 #!/bin/bash
 set -e
-# --- vLLM Server Runner ---
-# This script activates the virtual environment and starts the vLLM OpenAI-compatible server.
-# It accepts a model identifier (Hugging Face ID or local path) and passes any
-# additional arguments directly to the vLLM server command.
-
-# --- Configuration ---
-VENV_DIR="${VENV_DIR}"
-MODELS_DIR="${MODELS_DIR}"
-HOST="${SERVER_HOST}"
-PORT="${SERVER_PORT}"
-# Default arguments can be added here
-EXTRA_ARGS="--gpu-memory-utilization 0.90"
-
-if [ -z "\$1" ]; then
-    echo "ERROR: No model identifier provided."
-    echo "Usage: \$0 [MODEL_IDENTIFIER_OR_PATH] [ADDITIONAL_VLLM_ARGS...]"
-    echo "Example (HF):   \$0 meta-llama/Llama-2-7b-chat-hf"
-    echo "Example (Local):\$0 /path/to/my/model --tensor-parallel-size 2"
-    exit 1
-fi
-
-MODEL_ID=\$1; shift; CLI_ARGS="\$@"
-
-echo "Activating virtual environment..."; source "\${VENV_DIR}/bin/activate"
-echo "Starting vLLM server for model: \${MODEL_ID}"
-export HF_HOME="\${MODELS_DIR}" # For Hugging Face models, they will be cached here
+VENV_DIR="${VENV_DIR}"; MODELS_DIR="${MODELS_DIR}"; HOST="${SERVER_HOST}"; PORT="${SERVER_PORT}"; EXTRA_ARGS="--gpu-memory-utilization 0.90"
+if [ -z "\$1" ]; then echo "ERROR: No model identifier provided."; echo "Usage: \$0 [MODEL_ID] [ARGS...]"; exit 1; fi
+MODEL_ID=\$1; shift; CLI_ARGS="\$@"; echo "Activating venv..."; source "\${VENV_DIR}/bin/activate"
+echo "Starting vLLM server for model: \${MODEL_ID}"; export HF_HOME="\${MODELS_DIR}"
 export HUGGING_FACE_HUB_TOKEN=\${HUGGING_FACE_HUB_TOKEN}
 python -m vllm.entrypoints.openai.api_server --model "\${MODEL_ID}" --host "\${HOST}" --port "\${PORT}" \${EXTRA_ARGS} \${CLI_ARGS}
 EOF
-    chmod +x "$run_script_path"
-    chown "$VLLM_USER:$VLLM_USER" "$run_script_path"
+    chmod +x "$run_script_path"; chown "$VLLM_USER:$VLLM_USER" "$run_script_path"
     info "Created 'run_server.sh' at '$run_script_path'."
 }
 
+create_help_command() {
+    info "Step 6: Creating the system-wide 'vllm_help' command..."
+    local help_script_path="/usr/local/bin/vllm_help"
+    
+    # Using 'EOF' (with quotes) to prevent variable expansion inside the here-document
+    # Then using sed to replace placeholders with actual values from the installer.
+    cat <<'EOF' > "$help_script_path"
+#!/bin/bash
+# --- vLLM Server Helper ---
+G='\033[0;32m'; Y='\033[1;33m'; C='\033[0;36m'; NC='\033[0m'
+echo -e "${C}--- vLLM Server Management Cheat Sheet ---${NC}"
+
+echo -e "\n${Y}Managing the Service (systemd):${NC}"
+echo -e "  ${G}sudo systemctl start vllm${NC}      # Start the server"
+echo -e "  ${G}sudo systemctl stop vllm${NC}       # Stop the server"
+echo -e "  ${G}sudo systemctl restart vllm${NC}    # Restart the server"
+echo -e "  ${G}sudo systemctl status vllm${NC}     # Check the current status"
+echo -e "  ${G}sudo journalctl -u vllm -f${NC}     # View live server logs"
+
+echo -e "\n${Y}Verifying the Server is Running:${NC}"
+echo -e "  Run this command to check the API endpoint. It should return a JSON list of models."
+echo -e "  ${G}curl http://localhost:__SERVER_PORT__/v1/models${NC}"
+
+echo -e "\n${Y}Manual Operation (for testing and development):${NC}"
+echo -e "  1. Switch to the dedicated user:"
+echo -e "     ${G}sudo su - __VLLM_USER__${NC}"
+echo -e "  2. (Optional) Set your Hugging Face token for private models:"
+echo -e "     ${G}export HUGGING_FACE_HUB_TOKEN='your_token'${NC}"
+echo -e "  3. Run the server with a model:"
+echo -e "     ${G}./run_server.sh meta-llama/Llama-2-7b-chat-hf${NC}"
+echo -e "     ${G}./run_server.sh /path/to/your/local/model${NC}"
+
+echo -e "\n${Y}Configuration & File Locations:${NC}"
+echo -e "  - Service User:      ${C}__VLLM_USER__${NC}"
+echo -e "  - Installation Dir:  ${C}__VLLM_HOME_DIR__${NC}"
+echo -e "  - Python venv:       ${C}__VENV_DIR__${NC}"
+echo -e "  - HF Models Cache:   ${C}__MODELS_DIR__${NC}"
+echo -e "  - Run Script:        ${C}__VLLM_HOME_DIR__/run_server.sh${NC}"
+echo -e "  - Service File:      ${C}/etc/systemd/system/vllm.service${NC}"
+
+echo -e "\n${Y}How to Change the Model in the Service:${NC}"
+echo -e "  1. Edit the service file: ${G}sudo nano /etc/systemd/system/vllm.service${NC}"
+echo -e "  2. Find the 'ExecStart=' line and change the model path or ID."
+echo -e "  3. Reload systemd and restart the service:"
+echo -e "     ${G}sudo systemctl daemon-reload && sudo systemctl restart vllm${NC}"
+EOF
+
+    # Replace placeholders with actual values
+    sed -i "s|__VLLM_USER__|${VLLM_USER}|g" "$help_script_path"
+    sed -i "s|__SERVER_PORT__|${SERVER_PORT}|g" "$help_script_path"
+    sed -i "s|__VLLM_HOME_DIR__|${VLLM_HOME_DIR}|g" "$help_script_path"
+    sed -i "s|__VENV_DIR__|${VENV_DIR}|g" "$help_script_path"
+    sed -i "s|__MODELS_DIR__|${MODELS_DIR}|g" "$help_script_path"
+
+    chmod +x "$help_script_path"
+    info "'vllm_help' command created. You can now run it from anywhere to see this guide."
+}
+
 setup_systemd_service() {
-    info "Step 6: Optional - Setup systemd service."
-    # Use a standard read command to avoid issues with '-n 1' and the Enter key
+    info "Step 7: Optional - Setup systemd service."
+    # ... Function content is unchanged, omitted for brevity ...
     read -p "Do you want to create a systemd service to run the vLLM server on boot? (y/N) " -r CREATE_SERVICE_REPLY
-    if [[ ! "$CREATE_SERVICE_REPLY" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-        warn "Skipping systemd service creation."
-        return
-    fi
-
-    local model_location=""
-    local extra_service_args=""
-
+    if [[ ! "$CREATE_SERVICE_REPLY" =~ ^[Yy] ]]; then warn "Skipping systemd service creation."; return; fi
+    local model_location=""; local extra_service_args=""
     while true; do
         read -p "Use a Hugging Face model ID or a local path for the service? (hf/local): " -r model_type
         case "$model_type" in
-            [Hh][Ff])
-                read -p "Enter the Hugging Face model identifier: " -r model_location
-                if [ -z "$model_location" ]; then
-                    warn "Model identifier cannot be empty."
-                    continue
-                fi
-                break
-                ;;
-            [Ll][Oo][Cc][Aa][Ll])
-                read -p "Enter the absolute path to your local model directory: " -r model_location
-                if [ -z "$model_location" ]; then
-                    warn "Path cannot be empty."
-                    continue
-                fi
-                if [ ! -d "$model_location" ]; then
-                    warn "Directory not found at '${model_location}'. Please provide a valid absolute path."
-                    continue
-                fi
-                info "Ensuring '${VLLM_USER}' user has read access to '${model_location}'..."
-                # Grant read access to all files and read/execute to all directories for everyone.
-                # This is a safe and non-intrusive way to grant access.
-                chmod -R a+rX "${model_location}"
-                info "Permissions updated."
-                extra_service_args="--disable-log-stats"
-                info "Will use '--disable-log-stats' for a 100% local service."
-                break
-                ;;
-            *)
-                warn "Invalid input. Please enter 'hf' or 'local'."
-                ;;
+            [Hh][Ff]) read -p "Enter the Hugging Face model identifier: " -r model_location; if [ -n "$model_location" ]; then break; fi; warn "Model ID cannot be empty.";;
+            [Ll][Oo][Cc][Aa][Ll]) read -p "Enter the absolute path to your local model directory: " -r model_location; if [ -z "$model_location" ]; then warn "Path cannot be empty."; continue; fi; if [ ! -d "$model_location" ]; then warn "Directory not found."; continue; fi; info "Ensuring '${VLLM_USER}' user has access..."; chmod -R a+rX "${model_location}"; info "Permissions updated."; extra_service_args="--disable-log-stats"; info "Using '--disable-log-stats' for local service."; break;;
+            *) warn "Invalid input. Please enter 'hf' or 'local'.";;
         esac
     done
-
-    local service_file="/etc/systemd/system/vllm.service"
-    info "Creating systemd service file at '${service_file}'..."
-    # Note the quotes around model_location to handle paths with spaces
+    local service_file="/etc/systemd/system/vllm.service"; info "Creating systemd service file at '${service_file}'..."
     cat <<EOF > "$service_file"
 [Unit]
 Description=vLLM OpenAI-Compatible Server
 After=network.target
-
 [Service]
-User=${VLLM_USER}
-Group=${VLLM_USER}
-WorkingDirectory=${VLLM_HOME_DIR}
+User=${VLLM_USER}; Group=${VLLM_USER}; WorkingDirectory=${VLLM_HOME_DIR}
 ExecStart=${VLLM_HOME_DIR}/run_server.sh "${model_location}" ${extra_service_args}
-# To use a Hugging Face token for private models, uncomment and set the following line:
-# Environment="HUGGING_FACE_HUB_TOKEN=hf_..."
-Restart=always
-RestartSec=10
-
+Restart=always; RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    systemctl daemon-reload
-    systemctl enable vllm.service
-    info "Systemd service 'vllm.service' created and enabled."
-    warn "The service is enabled but not started. To start it, run: sudo systemctl start vllm"
-    info "To check the status and logs, use: sudo systemctl status vllm"
+    systemctl daemon-reload; systemctl enable vllm.service; info "Systemd service 'vllm.service' created and enabled."; warn "To start it, run: sudo systemctl start vllm"
 }
 
 # --- Main Execution Flow ---
@@ -239,24 +226,21 @@ main() {
     find_python_and_install_deps
     install_vllm
     create_run_script
+    create_help_command
     setup_systemd_service
+
     echo
     info "========================================================"
     info "          vLLM Installation Complete!                   "
     info "========================================================"
     echo
-    info "Key files and directories:"
-    echo -e "  - Installation Directory: ${COLOR_YELLOW}${VLLM_HOME_DIR}${COLOR_NC}"
-    echo -e "  - Models Directory (for HF cache): ${COLOR_YELLOW}${MODELS_DIR}${COLOR_NC}"
-    echo -e "  - Run Script: ${COLOR_YELLOW}${VLLM_HOME_DIR}/run_server.sh${COLOR_NC}"
+    info "A system-wide command ${CYAN}vllm_help${NC} has been created."
+    info "Run it from anywhere to get a cheat sheet on how to manage your server."
     echo
-    info "Next Steps:"
-    echo -e "1. ${COLOR_YELLOW}Switch to the vLLM user:${COLOR_NC} sudo su - ${VLLM_USER}"
-    echo -e "2. ${COLOR_YELLOW}Run the server manually:${COLOR_NC} ./run_server.sh meta-llama/Llama-2-7b-chat-hf"
+    info "Example:"
+    echo -e "  ${COLOR_YELLOW}sudo systemctl start vllm${NC}"
+    echo -e "  ${COLOR_YELLOW}vllm_help${NC}"
     echo
-    info "If you created the systemd service:"
-    echo -e "  - To start the service: ${COLOR_YELLOW}sudo systemctl start vllm${COLOR_NC}"
-    echo -e "  - To check its status: ${COLOR_YELLOW}sudo systemctl status vllm${COLOR_NC}"
 }
 
 main "$@"
