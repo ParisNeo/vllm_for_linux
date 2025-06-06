@@ -1,32 +1,37 @@
 #!/bin/bash
 
 # ==============================================================================
-# vLLM All-in-One Installer for Ubuntu
+# vLLM All-in-One Installer for Ubuntu (Improved Version)
 # ==============================================================================
 # This script will:
 # 1. Check for prerequisites (Ubuntu, NVIDIA GPU, CUDA drivers).
-# 2. Install dependencies like Python and the 'uv' package manager.
-# 3. Create a dedicated user and directory structure.
-# 4. Set up a Python virtual environment and install vLLM.
-# 5. Generate a 'run_server.sh' script to start the OpenAI-compatible server.
-# 6. Optionally, create and enable a systemd service to run vLLM on boot.
+# 2. Check for an existing compatible Python version (3.9-3.12).
+# 3. If no Python is found, it will rely on 'uv' to download a self-contained build.
+# 4. Install dependencies like 'uv' package manager.
+# 5. Create a dedicated user and directory structure.
+# 6. Set up a Python virtual environment and install vLLM.
+# 7. Generate a 'run_server.sh' script to start the OpenAI-compatible server.
+# 8. Optionally, create and enable a systemd service to run vLLM on boot.
 # ==============================================================================
 
 # --- Script Configuration ---
-# You can modify these variables before running the script.
-VLLM_USER="vllm"                                # The dedicated user to run the service.
-VLLM_HOME_DIR="/opt/vllm-server"                # Main directory for vLLM installation.
-VENV_DIR="${VLLM_HOME_DIR}/.venv"               # Virtual environment location.
-MODELS_DIR="${VLLM_HOME_DIR}/models"            # Directory to store downloaded models.
-PYTHON_VERSION="3.11"                           # Python version to use (vLLM supports 3.9-3.12).
-SERVER_HOST="0.0.0.0"                           # Host for the vLLM server.
-SERVER_PORT="8000"                              # Port for the vLLM server.
+VLLM_USER="vllm"
+VLLM_HOME_DIR="/opt/vllm-server"
+VENV_DIR="${VLLM_HOME_DIR}/.venv"
+MODELS_DIR="${VLLM_HOME_DIR}/models"
+# Default Python to use if none is found. Must be in the supported list below.
+DEFAULT_PYTHON_VERSION="3.11"
+SERVER_HOST="0.0.0.0"
+SERVER_PORT="8000"
+
+# --- Globals ---
+PYTHON_TO_USE="" # This will be populated by the Python check
 
 # --- Color Codes for Output ---
 COLOR_GREEN='\033[0;32m'
 COLOR_YELLOW='\033[1;33m'
 COLOR_RED='\033[0;31m'
-COLOR_NC='\033[0m' # No Color
+COLOR_NC='\033[0m'
 
 # --- Helper Functions ---
 info() {
@@ -59,7 +64,7 @@ check_prerequisites() {
 
     # Check for NVIDIA GPU and drivers
     if ! command -v nvidia-smi &> /dev/null; then
-        error "NVIDIA driver not found. Please install the appropriate NVIDIA drivers and CUDA toolkit for your GPU."
+        error "NVIDIA driver not found. Please install the appropriate NVIDIA drivers for your GPU."
     fi
     info "NVIDIA drivers found."
 
@@ -71,10 +76,30 @@ check_prerequisites() {
     info "GPU Compute Capability ${COMPUTE_CAPABILITY} is compatible."
 }
 
-setup_dependencies() {
-    info "Step 2: Installing system dependencies..."
+find_python_and_install_deps() {
+    info "Step 2: Detecting Python and installing dependencies..."
+
+    # Find a suitable Python version
+    # We check in reverse order to prefer newer versions.
+    SUPPORTED_PYTHONS=("3.12" "3.11" "3.10" "3.9")
+    for version in "${SUPPORTED_PYTHONS[@]}"; do
+        if command -v "python${version}" &> /dev/null; then
+            info "Found compatible system Python: python${version}"
+            PYTHON_TO_USE="$version"
+            break
+        fi
+    done
+
+    if [ -z "$PYTHON_TO_USE" ]; then
+        warn "No system-wide Python found in the supported range (3.9-3.12)."
+        info "'uv' will automatically download and manage a standalone Python build."
+        PYTHON_TO_USE="${DEFAULT_PYTHON_VERSION}"
+    fi
+    info "Will proceed using Python ${PYTHON_TO_USE} for the virtual environment."
+
+    # Install core dependencies. We no longer force a specific Python version from apt.
     apt-get update
-    apt-get install -y "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-venv" python3-pip curl wget
+    apt-get install -y python3-pip python3-venv curl wget
     info "System dependencies installed."
 
     info "Installing 'uv' Python package manager..."
@@ -90,24 +115,26 @@ setup_environment() {
     if id "$VLLM_USER" &>/dev/null; then
         info "User '$VLLM_USER' already exists."
     else
+        # The user's home directory will be the main vLLM directory
         useradd -r -m -d "$VLLM_HOME_DIR" -s /bin/bash "$VLLM_USER"
         info "Created dedicated user '$VLLM_USER' with home directory '$VLLM_HOME_DIR'."
     fi
 
     mkdir -p "$VENV_DIR"
     mkdir -p "$MODELS_DIR"
+    # Ensure ownership is correct, especially if user already existed
     chown -R "$VLLM_USER:$VLLM_USER" "$VLLM_HOME_DIR"
     info "Created directories and set permissions."
-
-    info "Creating Python virtual environment..."
-    su -s /bin/bash -c "cd '$VLLM_HOME_DIR' && /home/${VLLM_USER}/.cargo/bin/uv venv --python $PYTHON_VERSION '$VENV_DIR'" "$VLLM_USER"
-    info "Virtual environment created at '$VENV_DIR'."
 }
 
 install_vllm() {
-    info "Step 4: Installing vLLM and its dependencies..."
-    info "This may take a few minutes..."
+    info "Step 4: Creating virtual environment and installing vLLM..."
 
+    info "Creating Python virtual environment using Python ${PYTHON_TO_USE}..."
+    su -s /bin/bash -c "cd '$VLLM_HOME_DIR' && /home/${VLLM_USER}/.cargo/bin/uv venv --python $PYTHON_TO_USE '$VENV_DIR'" "$VLLM_USER"
+    info "Virtual environment created at '$VENV_DIR'."
+
+    info "Installing vLLM into the virtual environment. This may take a few minutes..."
     # The command is run in a subshell as the target user to handle activation and installation
     su -s /bin/bash -c "source '${VENV_DIR}/bin/activate' && /home/${VLLM_USER}/.cargo/bin/uv pip install vllm --torch-backend=auto" "$VLLM_USER"
 
@@ -228,8 +255,9 @@ EOF
 # --- Main Execution Flow ---
 main() {
     check_prerequisites
+    # The order is important: create user first, then install deps for that user.
     setup_environment
-    setup_dependencies
+    find_python_and_install_deps
     install_vllm
     create_run_script
     setup_systemd_service
