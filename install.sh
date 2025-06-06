@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# vLLM All-in-One Installer for Ubuntu (v3 - Robust Pathing)
+# vLLM All-in-One Installer for Ubuntu (v4 - Correct Verification)
 # ==============================================================================
 # This script will:
 # 1. Check for prerequisites (Ubuntu, NVIDIA GPU, CUDA drivers).
@@ -89,11 +89,10 @@ find_python_and_install_deps() {
     fi
     info "Will proceed using Python ${PYTHON_TO_USE} for the virtual environment."
     apt-get update
-    apt-get install -y python3-pip python3-venv curl wget bc # Added 'bc' for compute capability check
+    apt-get install -y python3-pip python3-venv curl wget bc
     info "System dependencies installed."
 
     info "Installing 'uv' Python package manager..."
-    # The `uv` installer places the binary in $HOME/.local/bin. For our user, this is /opt/vllm-server/.local/bin
     su -s /bin/bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh" "$VLLM_USER"
     info "'uv' installed successfully for user '$VLLM_USER'."
 }
@@ -115,21 +114,22 @@ install_vllm() {
     info "Step 4: Creating virtual environment and installing vLLM..."
 
     info "Creating Python virtual environment using Python ${PYTHON_TO_USE}..."
-    # Use the dynamically determined path for the uv executable
     su -s /bin/bash -c "cd '$VLLM_HOME_DIR' && '${UV_EXECUTABLE}' venv --python $PYTHON_TO_USE '$VENV_DIR'" "$VLLM_USER"
     info "Virtual environment created at '$VENV_DIR'."
 
     info "Installing vLLM into the virtual environment. This may take a few minutes..."
-    # Use the dynamic path here as well, and ensure the activate script path is correct
     su -s /bin/bash -c "source '${VENV_DIR}/bin/activate' && '${UV_EXECUTABLE}' pip install vllm --torch-backend=auto" "$VLLM_USER"
 
-    # Verify installation
-    local vllm_check
-    vllm_check=$(su -s /bin/bash -c "source '${VENV_DIR}/bin/activate' && python -m vllm --version" "$VLLM_USER")
-    if [[ $vllm_check == *"vllm version"* ]]; then
-        info "vLLM installed successfully. Version: ${vllm_check}"
+    # --- CORRECTED VERIFICATION STEP ---
+    info "Verifying vLLM installation..."
+    local vllm_version
+    # The correct way to get the version is by importing the package and accessing its __version__ attribute.
+    vllm_version=$(su -s /bin/bash -c "source '${VENV_DIR}/bin/activate' && python -c 'import vllm; print(vllm.__version__)'" "$VLLM_USER" 2>/dev/null)
+
+    if [ -n "$vllm_version" ]; then
+        info "vLLM installed successfully. Version: ${vllm_version}"
     else
-        error "vLLM installation failed. Please check the logs."
+        error "vLLM installation failed. Could not retrieve version after installation. Please check the logs."
     fi
 }
 
