@@ -57,5 +57,4 @@ COMMON_ARGS=(
 
 
 vllm serve ${MODEL_PATH} \
-  ${COMMON_ARGS[@]} \
-esac
+  ${COMMON_ARGS[@]}
