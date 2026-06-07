@@ -1,312 +1,444 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# ==============================================================================
-# vLLM All-in-One Installer for Ubuntu (v7 - Advanced Configuration & Summary)
-# ==============================================================================
-# This script will:
-# 1. Check prerequisites and install system dependencies.
-# 2. Create a dedicated user and directory structure.
-# 3. Interactively ask for server and vLLM-specific configurations.
-# 4. Install vLLM in an isolated Python environment using 'uv'.
-# 5. Generate a 'run_server.sh' script and a system-wide 'vllm_help' command.
-# 6. Optionally, create a systemd service with all the chosen configurations.
-# 7. Display a final summary of the entire setup.
-# ==============================================================================
+print_banner() {
+  cat <<'EOF'
+================================================================================
+__     __ _ _                 __            _ _                      
+\ \   / /| | |               / _|          | (_)                     
+ \ \_/ / | | | _ __ ___     | |_ ___  _ __ | |_ _ __  _   ___  __    
+  \   /  | | || '_ ` _ \    |  _/ _ \| '_ \| | | '_ \| | | \ \/ /    
+   | |   | | || | | | | |   | || (_) | | | | | | | | | |_| |>  <     
+   |_|   |_||_||_| |_| |_|   |_| \___/|_| |_|_|_|_| |_|\__,_/_/\_\    
 
-# --- Default Configuration (can be overridden by user input) ---
-VLLM_USER="vllm"
-VLLM_HOME_DIR="/opt/vllm-server"
-DEFAULT_PYTHON_VERSION="3.11"
+                        vllm_for_linux setup tool
+                              By ParisNeo
+================================================================================
+EOF
+}
 
-# Server & vLLM Parameters
-SERVER_HOST="0.0.0.0"
-SERVER_PORT="8000"
-GPU_MEMORY_UTILIZATION="0.90"
-TENSOR_PARALLEL_SIZE="1"
-MAX_MODEL_LEN="" # Leave empty for auto
-DTYPE="auto"
+print_info() {
+  echo "[INFO] $1"
+}
 
-# --- Globals ---
-VENV_DIR="${VLLM_HOME_DIR}/.venv"
-MODELS_DIR="${VLLM_HOME_DIR}/models"
-PYTHON_TO_USE=""
-UV_EXECUTABLE="${VLLM_HOME_DIR}/.local/bin/uv"
-SERVICE_MODEL_LOCATION="" # To store the model choice for the final summary
+print_warn() {
+  echo "[WARN] $1"
+}
 
-# --- Color Codes ---
-COLOR_GREEN='\033[0;32m'
-COLOR_YELLOW='\033[1;33m'
-COLOR_RED='\033[0;31m'
-COLOR_CYAN='\033[0;36m'
-COLOR_NC='\033[0m' # No Color
+print_error() {
+  echo "[ERROR] $1"
+}
 
-# --- Helper Functions ---
-info() {    echo -e "${COLOR_GREEN}[INFO] $1${NC}"; }
-warn() {    echo -e "${COLOR_YELLOW}[WARN] $1${NC}"; }
-error(){    echo -e "${COLOR_RED}[ERROR] $1${NC}"; exit 1; }
+print_banner
 
-# Ensure the script is run with sudo
-if [ "$EUID" -ne 0 ]; then
-  error "This script must be run as root. Please use 'sudo ./install.sh'"
+if ! command -v uv >/dev/null 2>&1; then
+  print_error "uv is not installed."
+  echo "Install it with:"
+  echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+  exit 1
 fi
 
-# --- Function Definitions ---
+print_info "Creating virtual environment..."
+uv venv venv
 
-check_prerequisites() {
-    info "Step 1: Checking prerequisites..."
-    if ! grep -q "Ubuntu" /etc/os-release; then
-        error "This script is designed for Ubuntu. Aborting."
-    fi
-    if ! command -v nvidia-smi &> /dev/null; then
-        error "NVIDIA driver not found. Please install the appropriate NVIDIA drivers for your GPU."
-    fi
-    info "NVIDIA drivers found."
-    if ! command -v bc &> /dev/null; then
-        warn "'bc' command not found. Installing..."
-        apt-get update &>/dev/null && apt-get install -y bc
-    fi
-    local COMPUTE_CAPABILITY
-    COMPUTE_CAPABILITY=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -n 1)
-    if (( $(echo "$COMPUTE_CAPABILITY < 7.0" | bc -l) )); then
-        error "Your GPU's compute capability is ${COMPUTE_CAPABILITY}, but vLLM requires 7.0 or higher."
-    fi
-    info "GPU Compute Capability ${COMPUTE_CAPABILITY} is compatible."
-}
+print_info "Activating virtual environment..."
+# shellcheck disable=SC1091
+source venv/bin/activate
 
-find_python_and_install_deps() {
-    info "Step 2: Detecting Python and installing dependencies..."
-    local SUPPORTED_PYTHONS=("3.12" "3.11" "3.10" "3.9")
-    for version in "${SUPPORTED_PYTHONS[@]}"; do
-        if command -v "python${version}" &> /dev/null; then
-            info "Found compatible system Python: python${version}"
-            PYTHON_TO_USE="$version"; break
-        fi
-    done
-    if [ -z "$PYTHON_TO_USE" ]; then
-        warn "No system-wide Python found in the supported range (3.9-3.12)."
-        info "'uv' will automatically download and manage a standalone Python build."
-        PYTHON_TO_USE="${DEFAULT_PYTHON_VERSION}"
-    fi
-    info "Will proceed using Python ${PYTHON_TO_USE} for the virtual environment."
-    apt-get update >/dev/null
-    apt-get install -y python3-pip python3-venv curl wget >/dev/null
-    info "System dependencies installed."
+print_info "Installing required Python packages..."
+uv pip install -U \
+  vllm \
+  huggingface_hub \
+  ascii-colors
 
-    info "Installing 'uv' Python package manager..."
-    su -s /bin/bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh" "$VLLM_USER"
-    info "'uv' installed successfully for user '$VLLM_USER'."
-}
+print_info "Writing CUDA validation script..."
+cat > test_cuda.py <<'PY'
+from pathlib import Path
+import os
+import subprocess
+import sys
 
-ask_for_configurations() {
-    info "Step 3: Configuring Server and vLLM Parameters..."
-    
-    read -p "Enter server host [${SERVER_HOST}]: " -r reply && SERVER_HOST=${reply:-$SERVER_HOST}
-    read -p "Enter server port [${SERVER_PORT}]: " -r reply && SERVER_PORT=${reply:-$SERVER_PORT}
-    read -p "Set GPU memory utilization (0.1 to 1.0) [${GPU_MEMORY_UTILIZATION}]: " -r reply && GPU_MEMORY_UTILIZATION=${reply:-$GPU_MEMORY_UTILIZATION}
-    read -p "Set tensor parallel size (for multi-GPU) [${TENSOR_PARALLEL_SIZE}]: " -r reply && TENSOR_PARALLEL_SIZE=${reply:-$TENSOR_PARALLEL_SIZE}
-    read -p "Set max model length (context size, leave empty for auto): " -r reply && MAX_MODEL_LEN=${reply:-$MAX_MODEL_LEN}
-    read -p "Set model dtype (e.g., auto, float16, bfloat16) [${DTYPE}]: " -r reply && DTYPE=${reply:-$DTYPE}
-}
+errors = []
+warnings = []
 
-setup_environment() {
-    info "Step 4: Setting up user and directories..."
-    if id "$VLLM_USER" &>/dev/null; then
-        info "User '$VLLM_USER' already exists."
-    else
-        useradd -r -m -d "$VLLM_HOME_DIR" -s /bin/bash "$VLLM_USER"
-        info "Created dedicated user '$VLLM_USER' with home directory '$VLLM_HOME_DIR'."
-    fi
-    mkdir -p "$VENV_DIR" "$MODELS_DIR"
-    chown -R "$VLLM_USER:$VLLM_USER" "$VLLM_HOME_DIR"
-    info "Directories created and permissions set."
-}
+def section(title):
+    print("=" * 80)
+    print(title)
+    print("=" * 80)
 
-install_vllm() {
-    info "Step 5: Creating virtual environment and installing vLLM..."
-    info "Creating Python virtual environment using Python ${PYTHON_TO_USE}..."
-    su -s /bin/bash -c "cd '$VLLM_HOME_DIR' && '${UV_EXECUTABLE}' venv --python $PYTHON_TO_USE '$VENV_DIR' --seed" "$VLLM_USER"
-    info "Virtual environment created at '$VENV_DIR'."
-    info "Installing vLLM into the virtual environment. This may take a few minutes..."
-    su -s /bin/bash -c "source '${VENV_DIR}/bin/activate' && '${UV_EXECUTABLE}' pip install vllm --torch-backend=auto" "$VLLM_USER"
-    info "Verifying vLLM installation..."
-    local vllm_version
-    vllm_version=$(su -s /bin/bash -c "source '${VENV_DIR}/bin/activate' && python -c 'import vllm; print(vllm.__version__)'" "$VLLM_USER" 2>/dev/null)
-    if [ -n "$vllm_version" ]; then
-        info "vLLM installed successfully. Version: ${vllm_version}"
-    else
-        error "vLLM installation failed. Could not retrieve version after installation."
-    fi
-}
+def info(msg):
+    print(f"[INFO] {msg}")
 
-build_vllm_args() {
-    local args="--gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} --tensor-parallel-size ${TENSOR_PARALLEL_SIZE} --dtype ${DTYPE}"
-    if [ -n "$MAX_MODEL_LEN" ]; then
-        args+=" --max-model-len ${MAX_MODEL_LEN}"
-    fi
-    echo "$args"
-}
+def warn(msg):
+    print(f"[WARN] {msg}")
+    warnings.append(msg)
 
-create_run_script() {
-    info "Step 6: Creating the 'run_server.sh' script..."
-    local run_script_path="${VLLM_HOME_DIR}/run_server.sh"
-    local vllm_args
-    vllm_args=$(build_vllm_args)
+def error(msg):
+    print(f"[ERROR] {msg}")
+    errors.append(msg)
 
-    cat <<EOF > "$run_script_path"
-#!/bin/bash
+def parse_python_version_tuple():
+    return sys.version_info.major, sys.version_info.minor
+
+def check_python_compatibility():
+    major, minor = parse_python_version_tuple()
+    py = f"{major}.{minor}"
+    print(f"Detected Python minor version: {py}")
+
+    if major != 3:
+        error(f"Unsupported Python major version: {major}. vLLM requires Python 3.")
+        return
+
+    if minor < 10:
+        error(
+            f"Python {py} is too old for current vLLM releases. "
+            "Use Python 3.10+."
+        )
+    elif minor == 10 or minor == 11:
+        warn(
+            f"Python {py} may work depending on the vLLM release, but newer installs "
+            "often work best on Python 3.12."
+        )
+    elif minor == 12:
+        info("Python 3.12 detected. This is a strong choice for recent vLLM releases.")
+    else:
+        warn(
+            f"Python {py} is newer than many documented examples. "
+            "If install/runtime issues appear, try Python 3.12."
+        )
+
+def analyze_cuda_visible_devices():
+    value = os.environ.get("CUDA_VISIBLE_DEVICES")
+    print(f"CUDA_VISIBLE_DEVICES : {value}")
+
+    if value is None:
+        info("CUDA_VISIBLE_DEVICES is not set; all visible GPUs are exposed by default.")
+        return
+
+    stripped = value.strip()
+    if stripped == "":
+        error("CUDA_VISIBLE_DEVICES is set to an empty string, which hides all GPUs.")
+        return
+
+    if stripped in {"-1", "none", "None"}:
+        error(f"CUDA_VISIBLE_DEVICES={value!r} hides CUDA devices.")
+        return
+
+    parts = [p.strip() for p in stripped.split(",")]
+    bad = [p for p in parts if not p.isdigit()]
+    if bad:
+        warn(
+            "CUDA_VISIBLE_DEVICES contains non-integer entries: "
+            + ", ".join(repr(x) for x in bad)
+        )
+    else:
+        info("CUDA_VISIBLE_DEVICES format looks valid.")
+
+def check_nvcc():
+    section("NVCC")
+    try:
+        result = subprocess.run(
+            ["nvcc", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            print(result.stdout)
+        else:
+            warn("nvcc not found in PATH. This is OK for wheel installs, but needed for many source builds.")
+    except Exception as ex:
+        warn(f"Failed to run nvcc --version: {ex}")
+
+section("SYSTEM")
+print(f"Python executable : {sys.executable}")
+print(f"Python version    : {sys.version}")
+analyze_cuda_visible_devices()
+print(f"LD_LIBRARY_PATH      : {os.environ.get('LD_LIBRARY_PATH')}")
+print()
+
+section("PYTHON COMPATIBILITY")
+check_python_compatibility()
+print()
+
+section("NVIDIA-SMI")
+nvidia_smi_ok = False
+try:
+    result = subprocess.run(
+        ["nvidia-smi"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    print(result.stdout)
+    if result.stderr:
+        print("STDERR:")
+        print(result.stderr)
+    if result.returncode == 0 and result.stdout.strip():
+        nvidia_smi_ok = True
+    else:
+        error("nvidia-smi failed or returned no usable output.")
+except Exception as ex:
+    print(f"Failed to run nvidia-smi: {ex}")
+    error(f"nvidia-smi unavailable: {ex}")
+
+print()
+
+section("DRIVER VERSION")
+driver_versions = []
+try:
+    result = subprocess.run(
+        [
+            "nvidia-smi",
+            "--query-gpu=driver_version",
+            "--format=csv,noheader",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    print(result.stdout)
+    if result.returncode == 0:
+        driver_versions = [x.strip() for x in result.stdout.splitlines() if x.strip()]
+    if not driver_versions:
+        warn("Could not read NVIDIA driver version.")
+except Exception as ex:
+    print(f"Failed to query driver version: {ex}")
+    warn(f"Driver version query failed: {ex}")
+
+print()
+
+section("/DEV/NVIDIA*")
+try:
+    nvidia_devices = sorted(Path("/dev").glob("nvidia*"))
+    for device in nvidia_devices:
+        print(device)
+    if not nvidia_devices:
+        warn("No /dev/nvidia* devices found.")
+except Exception as ex:
+    print(f"Failed to list NVIDIA devices: {ex}")
+    warn(f"Failed to list /dev/nvidia* devices: {ex}")
+
+print()
+
+section("PYTORCH")
+torch_ok = False
+cuda_available = False
+device_count = 0
+compute_caps = []
+
+try:
+    import torch
+
+    print(f"torch.__file__              : {torch.__file__}")
+    print(f"torch.__version__           : {torch.__version__}")
+    print(f"torch.version.cuda          : {torch.version.cuda}")
+
+    if torch.version.cuda is None:
+        error("Installed PyTorch does not appear to include CUDA support.")
+
+    try:
+        available = torch.cuda.is_available()
+        cuda_available = bool(available)
+        print(f"torch.cuda.is_available()   : {available}")
+        if not available:
+            error("torch.cuda.is_available() is False.")
+    except Exception as ex:
+        print(f"torch.cuda.is_available()   : ERROR -> {ex}")
+        error(f"torch.cuda.is_available() failed: {ex}")
+
+    try:
+        count = torch.cuda.device_count()
+        device_count = count
+        print(f"torch.cuda.device_count()   : {count}")
+        if count == 0:
+            error("PyTorch sees zero CUDA devices.")
+    except Exception as ex:
+        print(f"torch.cuda.device_count()   : ERROR -> {ex}")
+        error(f"torch.cuda.device_count() failed: {ex}")
+        count = 0
+
+    try:
+        torch.cuda.init()
+        print("torch.cuda.init()           : SUCCESS")
+    except Exception as ex:
+        print(f"torch.cuda.init()           : ERROR -> {ex}")
+        error(f"torch.cuda.init() failed: {ex}")
+
+    for i in range(count):
+        print()
+        print(f"GPU {i}")
+        print("-" * 40)
+
+        try:
+            print(f"Name                : {torch.cuda.get_device_name(i)}")
+        except Exception as ex:
+            print(f"Name                : ERROR -> {ex}")
+
+        try:
+            props = torch.cuda.get_device_properties(i)
+            print(f"Total memory (GB)   : {props.total_memory / 1024**3:.2f}")
+            print(f"Compute capability  : {props.major}.{props.minor}")
+            compute_caps.append((props.major, props.minor))
+            if props.major < 7:
+                warn(
+                    f"GPU {i} has compute capability {props.major}.{props.minor}; "
+                    "vLLM generally expects 7.0+ GPUs."
+                )
+        except Exception as ex:
+            print(f"Properties          : ERROR -> {ex}")
+            warn(f"Could not query properties for GPU {i}: {ex}")
+
+    print()
+    section("CUDA COMPUTE TEST")
+
+    try:
+        x = torch.randn(1000, 1000, device="cuda")
+        y = torch.randn(1000, 1000, device="cuda")
+        z = torch.matmul(x, y)
+        torch.cuda.synchronize()
+
+        print("CUDA computation: SUCCESS")
+        print(f"Result shape : {z.shape}")
+        print(f"Device       : {z.device}")
+        torch_ok = True
+
+    except Exception as ex:
+        print(f"CUDA computation: ERROR -> {ex}")
+        error(f"CUDA compute test failed: {ex}")
+
+except Exception as ex:
+    print(f"Failed to import torch: {ex}")
+    error(f"Failed to import torch: {ex}")
+
+print()
+section("LIBCUDA")
+libcuda_found = False
+try:
+    result = subprocess.run(
+        ["ldconfig", "-p"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    for line in result.stdout.splitlines():
+        if "libcuda.so" in line.lower():
+            print(line)
+            libcuda_found = True
+
+    if not libcuda_found:
+        warn("libcuda.so not found in ldconfig -p output.")
+except Exception as ex:
+    print(f"Failed to inspect libcuda: {ex}")
+    warn(f"Failed to inspect libcuda: {ex}")
+
+print()
+check_nvcc()
+print()
+
+section("DIAGNOSIS")
+
+if not nvidia_smi_ok:
+    print("- NVIDIA driver tools are not working.")
+    print("  Advice: install or repair the NVIDIA driver, then verify `nvidia-smi` works.")
+
+if not libcuda_found:
+    print("- libcuda.so is not visible to the dynamic linker.")
+    print("  Advice: ensure the NVIDIA driver is installed correctly and LD_LIBRARY_PATH is sane.")
+
+if errors:
+    print("- PyTorch/CUDA stack has blocking issues.")
+    if any("too old for current vLLM releases" in e for e in errors):
+        print("  Advice: recreate the environment with Python 3.10+; Python 3.12 is a good default.")
+    if any("does not appear to include CUDA support" in e for e in errors):
+        print("  Advice: reinstall in a fresh venv and verify you are getting a CUDA-enabled torch/vLLM build.")
+    if any("torch.cuda.is_available() is False." in e for e in errors):
+        print("  Advice: check the driver, CUDA visibility, GPU passthrough, and whether CUDA_VISIBLE_DEVICES hides devices.")
+    if any("zero CUDA devices" in e or "device_count" in e for e in errors):
+        print("  Advice: verify GPU access permissions and check CUDA_VISIBLE_DEVICES.")
+    if any("torch.cuda.init()" in e for e in errors):
+        print("  Advice: this often indicates a driver/runtime mismatch or broken CUDA userspace libraries.")
+    if any("CUDA compute test failed" in e for e in errors):
+        print("  Advice: initialization may succeed while kernels still fail; check driver/runtime compatibility.")
+    if any("CUDA_VISIBLE_DEVICES is set to an empty string" in e or "hides CUDA devices" in e for e in errors):
+        print("  Advice: unset CUDA_VISIBLE_DEVICES or set it to valid GPU indices such as 0 or 0,1.")
+
+if compute_caps and any(major < 7 for major, _ in compute_caps):
+    print("- One or more GPUs are below compute capability 7.0.")
+    print("  Advice: vLLM generally targets Volta/Turing/Ampere/Hopper-class GPUs or newer.")
+
+if not errors and torch_ok:
+    print("Everything looks OK for CUDA/PyTorch basic usage.")
+    print("vLLM should run if the selected model fits GPU memory and the installed wheel matches your platform.")
+
+if warnings:
+    print()
+    print("Warnings:")
+    for w in warnings:
+        print(f"  - {w}")
+
+print()
+section("END OF REPORT")
+
+sys.exit(0 if not errors else 1)
+PY
+
+print_info "Running CUDA validation..."
+set +e
+venv/bin/python test_cuda.py
+TEST_STATUS=$?
 set -e
-# --- vLLM Server Runner ---
-# This script starts the vLLM server with pre-defined configurations from the installer.
-# It accepts a model identifier (Hugging Face ID or local path) and passes any
-# additional arguments directly to the vLLM server command, overriding defaults.
-VENV_DIR="${VENV_DIR}"
-MODELS_DIR="${MODELS_DIR}"
-HOST="${SERVER_HOST}"
-PORT="${SERVER_PORT}"
-# Default arguments from installer.
-EXTRA_ARGS="${vllm_args}"
-if [ -z "\$1" ]; then
-    echo "ERROR: No model identifier provided."
-    echo "Usage: \$0 [MODEL_IDENTIFIER_OR_PATH] [ADDITIONAL_VLLM_ARGS...]"
-    exit 1
+
+echo
+if [ "$TEST_STATUS" -eq 0 ]; then
+  cat <<'EOF'
+================================================================================
+CUDA validation succeeded
+By ParisNeo
+================================================================================
+
+Your installation looks usable for vLLM.
+
+Next steps:
+- Activate the environment:
+    source venv/bin/activate
+- Test a model server:
+    python -m vllm.entrypoints.openai.api_server --model <your_model>
+
+Optional but recommended for Hugging Face downloads:
+- Create a token at: https://huggingface.co/settings/tokens
+- Login with:
+    hf auth login
+  or:
+    export HF_TOKEN="hf_xxxxxxxxxxxxxxxxx"
+EOF
+else
+  cat <<'EOF'
+================================================================================
+CUDA validation reported problems
+By ParisNeo
+================================================================================
+
+Common causes:
+- NVIDIA driver missing or broken
+- torch installed without CUDA support
+- driver/runtime mismatch
+- CUDA_VISIBLE_DEVICES hides your GPUs
+- container or VM has no GPU passthrough
+- GPU is too old for current vLLM builds
+- Python version is not ideal for your vLLM release
+
+Recommended checks:
+1. Run:
+     nvidia-smi
+2. Verify inside Python:
+     python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
+3. Check your visible devices:
+     echo "$CUDA_VISIBLE_DEVICES"
+4. Prefer Python 3.12 for recent vLLM installs.
+5. Ensure your GPU is compute capability 7.0 or newer.
+6. Recreate the venv if needed, then reinstall.
+
+The environment was installed, but you should fix the reported issues before using vLLM.
+EOF
 fi
-MODEL_ID=\$1; shift; CLI_ARGS="\$@"
-echo "Activating venv..."; source "\${VENV_DIR}/bin/activate"
-echo "Starting vLLM server for model: \${MODEL_ID}"
-export HF_HOME="\${MODELS_DIR}"; export HUGGING_FACE_HUB_TOKEN=\${HUGGING_FACE_HUB_TOKEN}
-python -m vllm.entrypoints.openai.api_server --model "\${MODEL_ID}" --host "\${HOST}" --port "\${PORT}" \${EXTRA_ARGS} \${CLI_ARGS}
-EOF
-    chmod +x "$run_script_path"
-    chown "$VLLM_USER:$VLLM_USER" "$run_script_path"
-    info "Created 'run_server.sh' at '$run_script_path'."
-}
-
-create_help_command() {
-    info "Step 7: Creating the system-wide 'vllm_help' command..."
-    local help_script_path="/usr/local/bin/vllm_help"
-    
-    cat <<'EOF' > "$help_script_path"
-#!/bin/bash
-# --- vLLM Server Helper ---
-G='\033[0;32m'; Y='\033[1;33m'; C='\033[0;36m'; NC='\033[0m'
-echo -e "${C}--- vLLM Server Management Cheat Sheet ---${NC}"
-echo -e "\n${Y}Managing the Service (systemd):${NC}"
-echo -e "  ${G}sudo systemctl start vllm${NC}      # Start the server"
-echo -e "  ${G}sudo systemctl stop vllm${NC}       # Stop the server"
-echo -e "  ${G}sudo systemctl restart vllm${NC}    # Restart the server"
-echo -e "  ${G}sudo systemctl status vllm${NC}     # Check the current status"
-echo -e "  ${G}sudo journalctl -u vllm -f${NC}     # View live server logs"
-echo -e "\n${Y}Verifying the Server is Running:${NC}"
-echo -e "  Run this command to check the API endpoint:"
-echo -e "  ${G}curl http://localhost:__SERVER_PORT__/v1/models${NC}"
-echo -e "\n${Y}Manual Operation (for testing):${NC}"
-echo -e "  1. Switch to the dedicated user: ${G}sudo su - __VLLM_USER__${NC}"
-echo -e "  2. Run the server with a model: ${G}./run_server.sh model_id_or_path${NC}"
-echo -e "\n${Y}Configuration & File Locations:${NC}"
-echo -e "  - Service User:      ${C}__VLLM_USER__${NC}"
-echo -e "  - Installation Dir:  ${C}__VLLM_HOME_DIR__${NC}"
-echo -e "  - Service File:      ${C}/etc/systemd/system/vllm.service${NC}"
-echo -e "\n${Y}How to Change the Service Configuration:${NC}"
-echo -e "  1. Edit the service file: ${G}sudo nano /etc/systemd/system/vllm.service${NC}"
-echo -e "  2. Find the 'ExecStart=' line and change the model or arguments."
-echo -e "  3. Reload systemd and restart: ${G}sudo systemctl daemon-reload && sudo systemctl restart vllm${NC}"
-EOF
-    sed -i "s|__VLLM_USER__|${VLLM_USER}|g" "$help_script_path"
-    sed -i "s|__SERVER_PORT__|${SERVER_PORT}|g" "$help_script_path"
-    sed -i "s|__VLLM_HOME_DIR__|${VLLM_HOME_DIR}|g" "$help_script_path"
-    chmod +x "$help_script_path"
-    info "'vllm_help' command created. You can run it from anywhere."
-}
-
-setup_systemd_service() {
-    info "Step 8: Optional - Setup systemd service."
-    read -p "Do you want to create a systemd service to run the vLLM server on boot? (y/N) " -r CREATE_SERVICE_REPLY
-    if [[ ! "$CREATE_SERVICE_REPLY" =~ ^[Yy] ]]; then warn "Skipping systemd service creation."; return; fi
-
-    local model_location=""; local service_extra_args=""
-    local vllm_args=$(build_vllm_args)
-
-    while true; do
-        read -p "Use a Hugging Face model ID or a local path for the service? (hf/local): " -r model_type
-        case "$model_type" in
-            [Hh][Ff])
-                read -p "Enter the Hugging Face model identifier: " -r model_location
-                if [ -n "$model_location" ]; then SERVICE_MODEL_LOCATION=$model_location; break; fi
-                warn "Model ID cannot be empty."
-                ;;
-            [Ll][Oo][Cc][Aa][Ll])
-                read -p "Enter the absolute path to your local model directory: " -r model_location
-                if [ -z "$model_location" ]; then warn "Path cannot be empty."; continue; fi
-                if [ ! -d "$model_location" ]; then warn "Directory not found."; continue; fi
-                info "Ensuring '${VLLM_USER}' user has read access to '${model_location}'..."
-                chmod -R a+rX "${model_location}"; info "Permissions updated."
-                service_extra_args="--disable-log-stats"; SERVICE_MODEL_LOCATION=$model_location
-                break
-                ;;
-            *) warn "Invalid input. Please enter 'hf' or 'local'.";;
-        esac
-    done
-
-    local service_file="/etc/systemd/system/vllm.service"
-    info "Creating systemd service file at '${service_file}'..."
-    cat <<EOF > "$service_file"
-[Unit]
-Description=vLLM OpenAI-Compatible Server
-After=network.target
-[Service]
-User=${VLLM_USER}
-Group=${VLLM_USER}
-WorkingDirectory=${VLLM_HOME_DIR}
-ExecStart=${VLLM_HOME_DIR}/run_server.sh "${SERVICE_MODEL_LOCATION}" ${vllm_args} ${service_extra_args}
-Restart=always
-RestartSec=10
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl daemon-reload; systemctl enable vllm.service; info "Systemd service 'vllm.service' created and enabled."; warn "To start it, run: sudo systemctl start vllm"
-}
-
-display_final_summary() {
-    info "========================================================"
-    info "          vLLM Installation Complete!                   "
-    info "========================================================"
-    echo
-    printf "${COLOR_CYAN}%-25s${NC} %-s\n" "vLLM User:" "$VLLM_USER"
-    printf "${COLOR_CYAN}%-25s${NC} %-s\n" "Installation Directory:" "$VLLM_HOME_DIR"
-    printf "${COLOR_CYAN}%-25s${NC} %-s\n" "Python Environment:" "$VENV_DIR"
-    echo
-    printf "${COLOR_YELLOW}%-s${NC}\n" "--- Server Configuration ---"
-    printf "${COLOR_CYAN}%-25s${NC} %-s\n" "Host:" "$SERVER_HOST"
-    printf "${COLOR_CYAN}%-25s${NC} %-s\n" "Port:" "$SERVER_PORT"
-    echo
-    printf "${COLOR_YELLOW}%-s${NC}\n" "--- vLLM Core Parameters ---"
-    printf "${COLOR_CYAN}%-25s${NC} %-s\n" "GPU Memory Utilization:" "$GPU_MEMORY_UTILIZATION"
-    printf "${COLOR_CYAN}%-25s${NC} %-s\n" "Tensor Parallel Size:" "$TENSOR_PARALLEL_SIZE"
-    printf "${COLOR_CYAN}%-25s${NC} %-s\n" "Max Model Length:" "${MAX_MODEL_LEN:-auto}"
-    printf "${COLOR_CYAN}%-25s${NC} %-s\n" "Data Type (dtype):" "$DTYPE"
-    if [ -n "$SERVICE_MODEL_LOCATION" ]; then
-        echo
-        printf "${COLOR_YELLOW}%-s${NC}\n" "--- Systemd Service ---"
-        printf "${COLOR_CYAN}%-25s${NC} %-s\n" "Service Enabled:" "Yes"
-        printf "${COLOR_CYAN}%-25s${NC} %-s\n" "Model:" "$SERVICE_MODEL_LOCATION"
-    fi
-    echo
-    info "A system-wide command ${COLOR_CYAN}vllm_help${NC} has been created."
-    info "Run it from anywhere to get a cheat sheet on how to manage your server."
-    echo
-}
-
-# --- Main Execution Flow ---
-main() {
-    check_prerequisites
-    find_python_and_install_deps
-    ask_for_configurations
-    setup_environment
-    install_vllm
-    create_run_script
-    create_help_command
-    setup_systemd_service
-    display_final_summary
-}
-
-main "$@"
