@@ -57,4 +57,5 @@ COMMON_ARGS=(
 
 printf 'vllm serve %q ' "${MODEL_PATH}" "${COMMON_ARGS[@]}"
 echo
-vllm serve ${MODEL_PATH} ${COMMON_ARGS[@]}
+set -x
+vllm serve "${MODEL_PATH}" "${COMMON_ARGS[@]}"
