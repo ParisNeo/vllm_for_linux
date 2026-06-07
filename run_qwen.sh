@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${ROOT_DIR}/venv"
-DEFAULT_LOCAL_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.5-397B-A17B-GPTQ-Int4"
+DEFAULT_LOCAL_MODEL="./models/Qwen__Qwen3.5-397B-A17B-GPTQ-Int4"
 DOWNLOAD_SCRIPT="${ROOT_DIR}/download.sh"
 
 MODEL_PATH="${1:-}"
@@ -44,10 +44,10 @@ echo " Default max_model_len: ${MAX_MODEL_LEN:-260000}"
 echo " Profile: ${PROFILE:-text}"
 echo " Model: ${MODEL_PATH}"
 echo "============================================================"
-
+#  --host "${HOST:-127.0.0.1}"
+#  --port "${PORT:-8000}"
 COMMON_ARGS=(
-  --host "${HOST:-127.0.0.1}"
-  --port "${PORT:-8000}"
+
   --tensor-parallel-size "${TP_SIZE:-4}"
   --max-model-len "${MAX_MODEL_LEN:-260000}"
   --gpu-memory-utilization "${GPU_MEM_UTIL:-0.92}"
