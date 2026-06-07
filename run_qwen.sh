@@ -12,10 +12,7 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then
   source "${VENV_DIR}/bin/activate"
 else
   echo "Virtual environment not found at ${VENV_DIR}" >&2
-  echo "Create it first:" >&2
-  echo "  python -m venv .venv" >&2
-  echo "  source .venv/bin/activate" >&2
-  echo "  pip install -r requirements.txt" >&2
+  echo "please run install.sh first" >&2
   exit 1
 fi
 
@@ -28,7 +25,7 @@ if [[ -z "${MODEL_PATH}" ]]; then
     echo "  ${DEFAULT_LOCAL_MODEL}" >&2
     echo "" >&2
     echo "Please download it first by running:" >&2
-    echo "  chmod +x download.sh" >&2
+    echo "  chmod +x download.sh --model Qwen/Qwen3.5-397B-A17B-GPTQ-Int4" >&2
     echo "  ./download.sh" >&2
     echo "" >&2
     echo "Then re-run:" >&2
@@ -55,7 +52,7 @@ COMMON_ARGS=(
   --max-model-len "${MAX_MODEL_LEN:-260000}"
   --gpu-memory-utilization "${GPU_MEM_UTIL:-0.92}"
   --quantization moe_wna16
-  --reasoning-parser qwen3
+  --language-model-only
 )
 
 case "${PROFILE:-text}" in
