@@ -545,6 +545,25 @@ Your installation looks usable for vLLM.
 Next steps:
 - Activate the environment:
     source venv/bin/activate
+    
+- Download a model snapshot from Hugging Face:
+    python download.py --model Qwen/Qwen3-32B --dir models
+
+- Download a Mistral model:
+    python download.py --model mistralai/Mistral-Nemo-Instruct-2407 --dir models
+
+- Download to a custom revision:
+    python download.py --model Qwen/Qwen3-32B --revision main --dir models
+
+- Dry run without downloading:
+    python download.py --model Qwen/Qwen3-32B --dry-run
+
+- Download only selected files:
+    python download.py --model Qwen/Qwen3-32B --allow-pattern "*.json" --allow-pattern "*.safetensors"
+
+- Exclude unwanted files:
+    python download.py --model Qwen/Qwen3-32B --ignore-pattern "*.pt" --ignore-pattern "*.bin"
+
 
 - Make sure your launcher is executable:
     chmod +x run.sh
