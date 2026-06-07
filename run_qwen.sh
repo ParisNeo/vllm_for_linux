@@ -54,8 +54,8 @@ COMMON_ARGS=(
   --quantization moe_wna16
   --language-model-only
 )
-
-printf 'vllm serve %q ' "${MODEL_PATH}" "${COMMON_ARGS[@]}"
+printf 'CMD: '
+printf '%q ' vllm serve "${MODEL_PATH}" "${COMMON_ARGS[@]}"
 echo
 set -x
 vllm serve "${MODEL_PATH}" "${COMMON_ARGS[@]}"
