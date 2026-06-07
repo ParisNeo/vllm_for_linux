@@ -14,6 +14,8 @@ ENABLE_PREFIX_CACHING="${ENABLE_PREFIX_CACHING:-1}"
 ENABLE_EXPERT_PARALLEL="${ENABLE_EXPERT_PARALLEL:-1}"
 ENABLE_TOOLS="${ENABLE_TOOLS:-1}"
 DISABLE_THINKING="${DISABLE_THINKING:-0}"
+GDN_PREFILL_BACKEND="${GDN_PREFILL_BACKEND:-}"
+EXTRA_ARGS="${EXTRA_ARGS:-}"
 
 if [[ -z "$MODEL_PATH" ]]; then
   echo "Usage: $0 <local-model-path>"
@@ -21,8 +23,10 @@ if [[ -z "$MODEL_PATH" ]]; then
 fi
 
 if [[ -f "venv/bin/activate" ]]; then
+  # shellcheck disable=SC1091
   source venv/bin/activate
 elif [[ -f ".venv/bin/activate" ]]; then
+  # shellcheck disable=SC1091
   source .venv/bin/activate
 fi
 
@@ -30,6 +34,7 @@ export VLLM_WORKER_MULTIPROC_METHOD="${VLLM_WORKER_MULTIPROC_METHOD:-spawn}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 MODEL_PATH="$(realpath "$MODEL_PATH")"
 
@@ -72,5 +77,18 @@ fi
 if [[ "$DISABLE_THINKING" == "1" ]]; then
   ARGS+=(--default-chat-template-kwargs '{"enable_thinking": false}')
 fi
+
+if [[ -n "$GDN_PREFILL_BACKEND" ]]; then
+  ARGS+=(--gdn-prefill-backend "$GDN_PREFILL_BACKEND")
+fi
+
+if [[ -n "$EXTRA_ARGS" ]]; then
+  # shellcheck disable=SC2206
+  EXTRA_SPLIT=( $EXTRA_ARGS )
+  ARGS+=("${EXTRA_SPLIT[@]}")
+fi
+
+echo "Starting with:"
+printf '  %s\n' "${ARGS[@]}"
 
 python -m vllm.entrypoints.openai.api_server "${ARGS[@]}"
