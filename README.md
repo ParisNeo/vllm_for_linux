@@ -6,6 +6,9 @@
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](#contributing)
 [![Powered by vLLM](https://img.shields.io/badge/Powered%20by-vLLM-success.svg)](https://github.com/vllm-project/vllm)
 
+<img width="1693" height="929" alt="image" src="https://github.com/user-attachments/assets/285ea1be-1950-42be-a198-ae3650c4eda5" />
+
+
 This repository provides an automated, all-in-one installation script to set up and configure the [vLLM](https://github.com/vllm-project/vllm) inference server on an Ubuntu-based system. The script is designed for developers and MLOps engineers who want a quick, repeatable, and robust setup for serving large language models with high performance.
 
 The script automates the entire process, from checking prerequisites to deploying the server as an optional `systemd` service for production use.
