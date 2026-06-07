@@ -1,4 +1,7 @@
-# vLLM All-in-One Installer for Linux
+# vllm_for_linux
+
+
+
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/ParisNeo/vllm_for_linux/blob/main/LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Ubuntu-orange.svg)](https://ubuntu.com/)
@@ -9,127 +12,219 @@
 <img width="1693" height="929" alt="image" src="https://github.com/user-attachments/assets/285ea1be-1950-42be-a198-ae3650c4eda5" />
 
 
-This repository provides an automated, all-in-one installation script to set up and configure the [vLLM](https://github.com/vllm-project/vllm) inference server on an Ubuntu-based system. The script is designed for developers and MLOps engineers who want a quick, repeatable, and robust setup for serving large language models with high performance.
 
-The script automates the entire process, from checking prerequisites to deploying the server as an optional `systemd` service for production use.
+A practical Linux setup toolkit for serving LLMs with **vLLM**, downloading models from Hugging Face, validating CUDA, and launching many model families from either local paths or Hub repositories.
 
-## Key Features
+> By ParisNeo
 
--   **🚀 Automated Setup**: A single command (`./install.sh`) handles everything.
--   **🛡️ Best Practices**: Creates a dedicated, non-root user (`vllm`) for security and isolates dependencies in a Python virtual environment managed by `uv`.
--   **📂 Centralized Management**: All files, including the environment, models, and scripts, are organized under a single directory (`/opt/vllm-server`).
--   **⚙️ Production Ready**: Includes an option to generate and enable a `systemd` service for running the vLLM server automatically on boot.
--   **🤖 Easy to Use**: Generates a simple `run_server.sh` script to manually start the OpenAI-compatible API server.
--   **🔧 Customizable**: Key configuration variables (like directories, user, and port) can be easily modified at the top of the `install.sh` script.
+## What it does
 
-## Prerequisites
+`vllm_for_linux` is a small utility bundle designed to make local and server-side vLLM deployment less painful on Linux.
 
-Before running the installation script, please ensure your system meets the following requirements:
+It helps with:
 
-1.  **Operating System**: **Ubuntu Linux**.
-2.  **Hardware**: An **NVIDIA GPU** with **Compute Capability 7.0 or higher** (e.g., V100, T4, RTX 20xx, A100, H100).
-3.  **Software**: **NVIDIA drivers** and the **CUDA Toolkit** must be installed and functioning correctly. You can verify this by running `nvidia-smi`.
-4.  **Permissions**: You must have `sudo` or `root` access to run the script.
+- Bootstrapping a clean Python environment.
+- Installing `vllm`, `huggingface_hub`, and `ascii-colors`.
+- Downloading models from Hugging Face into local folders.
+- Validating NVIDIA driver, CUDA, PyTorch, and GPU visibility.
+- Serving models from local paths or directly from the Hub.
+- Supporting model-specific startup flags for families like Qwen, DeepSeek, and Mistral.
+
+## Workflow
+
+The project follows a simple flow:
+
+1. Install the environment with `install.sh`.
+2. Validate CUDA with `test_cuda.py`.
+3. Download a model snapshot locally.
+4. Start the vLLM OpenAI-compatible server.
+5. Connect your client app to the exposed API endpoint.
+
+## Project layout
+
+```text
+vllm_for_linux/
+├── install.sh
+├── test_cuda.py
+├── download_model.py
+├── serve_model.sh
+└── README.md
+```
+
+## Features
+
+| Feature | Description |
+|---|---|
+| Environment bootstrap | Uses `uv` when available and can fall back to `python -m venv` when needed. |
+| Python handling | Prefers a managed Python runtime through `uv` for better reproducibility. |
+| CUDA validation | Checks `nvidia-smi`, `libcuda`, PyTorch CUDA support, GPU count, compute capability, and a real CUDA matmul test. |
+| Hugging Face downloads | Downloads full model snapshots into deterministic local directories. |
+| Token guidance | Explains how to configure `HF_TOKEN` for gated models, higher limits, and more reliable downloads. |
+| Model launcher | Supports local model paths and Hub repo IDs. |
+| Family-aware serving | Can attach model-specific options such as reasoning parsers and Mistral loader settings. |
+| CLI-friendly UX | Uses `ascii-colors` banners and readable console diagnostics. |
+
+## Requirements
+
+- Linux
+- NVIDIA GPU and driver
+- CUDA-compatible PyTorch runtime
+- Python 3.10+ for fallback mode, with `uv` preferred for managing the right Python version
+- Internet access for first-time package/model downloads, unless you work from pre-downloaded local assets
 
 ## Installation
 
-The installation is performed by a single script.
+### Recommended
 
-1.  **Clone the repository:**
-    ```sh
-    git clone https://github.com/ParisNeo/vllm_for_linux.git
-    cd vllm_for_linux
-    ```
+```bash
+chmod +x install.sh
+./install.sh
+```
 
-2.  **Make the script executable:**
-    ```sh
-    chmod +x install.sh
-    ```
+This installer:
 
-3.  **Run the installation script:**
-    ```sh
-    sudo ./install.sh
-    ```
-    The script will guide you through the process, check for prerequisites, and ask if you want to set up the `systemd` service for automatic startup.
+- Uses `uv` if it is available.
+- Tries to install `uv` automatically if it is missing.
+- Falls back to `python -m venv` when possible.
+- Installs all required Python packages.
+- Runs a CUDA validation pass at the end.
 
-## Post-Installation
+### Manual environment setup
 
-After the installation is complete, you can run and manage the vLLM server.
+```bash
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -U vllm huggingface_hub ascii-colors
+```
 
-### Running the Server Manually
+## CUDA validation
 
-This is the recommended way to test your setup or run the server for development purposes.
+After installation, the toolkit runs `test_cuda.py` to verify that the machine is ready.
 
-1.  **Switch to the dedicated `vllm` user:**
-    ```sh
-    sudo su - vllm
-    ```
+It checks:
 
-2.  **(Optional) Set your Hugging Face Hub Token**
-    If you need to access private or gated models, export your token.
-    ```sh
-    export HUGGING_FACE_HUB_TOKEN='hf_YourTokenHere'
-    ```
+- Python runtime information
+- `CUDA_VISIBLE_DEVICES`
+- `nvidia-smi`
+- NVIDIA driver visibility
+- `/dev/nvidia*` devices
+- `torch.cuda.is_available()`
+- GPU count and compute capability
+- Real CUDA tensor computation
+- `libcuda.so` visibility through `ldconfig`
 
-3.  **Run the server:**
-    Use the generated `run_server.sh` script and pass the model identifier as an argument.
-    ```sh
-    # Usage: ./run_server.sh [MODEL_IDENTIFIER]
-    ./run_server.sh meta-llama/Llama-2-7b-chat-hf
-    ```
-    The server will start, and the model will be downloaded to `/opt/vllm-server/models` on its first run.
+If something is broken, the script prints targeted advice instead of failing silently.
 
-### Managing the Systemd Service
+## Downloading models
 
-If you chose to create the systemd service during installation, you can manage it using standard `systemctl` commands. This is ideal for production environments.
+```bash
+source venv/bin/activate
+python download_model.py --model mistralai/Mistral-7B-Instruct-v0.2 --dir models
+```
 
--   **Start the service:**
-    ```sh
-    sudo systemctl start vllm
-    ```
+### With authentication
 
--   **Check the status of the service:**
-    ```sh
-    sudo systemctl status vllm
-    ```
+```bash
+export HF_TOKEN="hf_xxxxxxxxxxxxxxxxx"
+python download_model.py --model meta-llama/Llama-3.1-8B-Instruct --dir models
+```
 
--   **View live logs:**
-    ```sh
-    sudo journalctl -u vllm -f
-    ```
+### Dry run
 
--   **Stop the service:**
-    ```sh
-    sudo systemctl stop vllm
-    ```
+```bash
+python download_model.py --model Qwen/Qwen3-32B --dry-run
+```
 
--   **Enable the service to start on boot (done by the script):**
-    ```sh
-    sudo systemctl enable vllm
-    ```
+## Serving models
 
--   **Disable the service from starting on boot:**
-    ```sh
-    sudo systemctl disable vllm
-    ```
+```bash
+source venv/bin/activate
+./serve_model.sh Qwen/Qwen3-32B
+```
 
-## Configuration
+### Local model path
 
-The `install.sh` script is designed to be easily configurable. You can modify the variables at the top of the file to change default paths, the dedicated user, server port, and more.
+```bash
+./serve_model.sh /absolute/path/to/models/Qwen__Qwen3-32B
+```
 
-The generated `run_server.sh` script can also be edited to add or modify default vLLM command-line arguments, such as `--tensor-parallel-size` or `--gpu-memory-utilization`.
+### Example environment overrides
 
-## Contributing
+```bash
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+export TP_SIZE=4
+export PORT=8000
+export MAX_MODEL_LEN=32768
+./serve_model.sh mistralai/Mistral-Nemo-Instruct-2407
+```
 
-Help is welcome! We appreciate any contributions, from fixing a typo to adding new features. Please feel free to open an issue to report a bug or suggest an improvement.
+## Supported model families
 
-If you'd like to contribute code, please follow these steps:
-1.  Fork the repository.
-2.  Create a new branch (`git checkout -b feature/my-new-feature`).
-3.  Make your changes.
-4.  Commit your changes (`git commit -am 'Add some feature'`).
-5.  Push to the branch (`git push origin feature/my-new-feature`).
-6.  Submit a new Pull Request.
+| Family | Notes |
+|---|---|
+| Qwen | Can use Qwen reasoning parser for supported reasoning-capable variants. |
+| DeepSeek | Can attach DeepSeek R1 reasoning parser when applicable. |
+| Mistral | Can use Mistral tokenizer/config/load settings for Mistral-family models. |
+| Local mirrored models | Works with absolute local paths for offline or air-gapped setups. |
+
+## Hugging Face token setup
+
+Public models can often be downloaded without authentication, but using a token is recommended.
+
+Why use `HF_TOKEN`:
+
+- Better rate limits
+- More reliable downloads
+- Access to gated/private repositories you are authorized for
+- Cleaner automation on servers
+
+Create a token here:
+
+- [Hugging Face Access Tokens](https://huggingface.co/settings/tokens)
+
+Then either:
+
+```bash
+export HF_TOKEN="hf_xxxxxxxxxxxxxxxxx"
+```
+
+or:
+
+```bash
+hf auth login
+```
+
+## Example API launch
+
+```bash
+python -m vllm.entrypoints.openai.api_server \
+  --model mistralai/Mistral-7B-Instruct-v0.2 \
+  --host 127.0.0.1 \
+  --port 8000
+```
+
+## Troubleshooting
+
+| Problem | Likely cause | What to check |
+|---|---|---|
+| `nvidia-smi` fails | Driver missing or broken | Reinstall or repair NVIDIA drivers |
+| `torch.cuda.is_available()` is `False` | CUDA runtime mismatch, wrong wheel, hidden devices | Check driver, PyTorch build, `CUDA_VISIBLE_DEVICES` |
+| Zero visible GPUs | Masked devices or missing passthrough | Check environment variables, container runtime, VM GPU mapping |
+| CUDA test fails | Driver/runtime incompatibility | Recreate venv and validate CUDA stack again |
+| Model download denied | Missing token or missing access approval | Set `HF_TOKEN` and accept model terms on Hugging Face |
+| vLLM startup fails on model family quirks | Missing family-specific arguments | Extend `serve_model.sh` preset logic |
+
+## Roadmap
+
+- Add more family presets such as Llama, Phi, Granite, and EXAONE.
+- Add YAML-based model presets.
+- Add health checks and structured logs for the server launcher.
+- Add a generated architecture infographic for the README.
+
+## Credits
+
+Created by **ParisNeo**.
 
 ## License
 
