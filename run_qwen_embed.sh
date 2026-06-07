@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${ROOT_DIR}/venv"
-DEFAULT_LOCAL_MODEL="${ROOT_DIR}/models/Qwen__Qwen3-Embedding-8B"
+DEFAULT_LOCAL_MODEL="models/Qwen__Qwen3-Embedding-8B"
 DOWNLOAD_SCRIPT="${ROOT_DIR}/download.sh"
 
 MODEL_PATH="${1:-}"
