@@ -56,6 +56,6 @@ COMMON_ARGS=(
 )
 
 
-exec vllm serve "${MODEL_PATH}" \
-  "${COMMON_ARGS[@]}" \
+vllm serve ${MODEL_PATH} \
+  ${COMMON_ARGS[@]} \
 esac
