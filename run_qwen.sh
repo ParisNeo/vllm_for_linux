@@ -55,6 +55,5 @@ COMMON_ARGS=(
   --language-model-only
 )
 
-
-vllm serve ${MODEL_PATH} \
-  ${COMMON_ARGS[@]}
+echo ${MODEL_PATH} ${COMMON_ARGS[@]}
+vllm serve ${MODEL_PATH} ${COMMON_ARGS[@]}
