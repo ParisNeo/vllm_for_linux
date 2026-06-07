@@ -34,8 +34,8 @@ if [[ -z "${MODEL_PATH}" ]]; then
   fi
 fi
 
-export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
-export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
+# export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+# export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
 
 echo "============================================================"
 echo " Qwen3.5-397B-A17B vLLM launcher"
