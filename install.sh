@@ -8,19 +8,19 @@ PYTHON_BIN=""
 BOOTSTRAP_MODE=""
 
 print_banner() {
-  cat <<'EOF'
+  cat <<'BANNER'
 ================================================================================
-__     __ _ _                 __            _ _                      
-\ \   / /| | |               / _|          | (_)                     
- \ \_/ / | | | _ __ ___     | |_ ___  _ __ | |_ _ __  _   ___  __    
-  \   /  | | || '_ ` _ \    |  _/ _ \| '_ \| | | '_ \| | | \ \/ /    
-   | |   | | || | | | | |   | || (_) | | | | | | | | | |_| |>  <     
-   |_|   |_||_||_| |_| |_|   |_| \___/|_| |_|_|_|_| |_|\__,_/_/\_\    
+          _ _                 __            _ _                      
+         | | |               / _|          | (_)                     
+__     __| | | _ __ ___     | |_ ___  _ __ | |_ _ __  _   ___  __    
+\ \   / /| | || '_ ` _ \    |  _/ _ \| '_ \| | | '_ \| | | \ \/ /    
+ \ \_/ / | | || | | | | |   | || (_) | | | | | | | | | |_| |>  <     
+  \___/  |_|_||_| |_| |_|   |_| \___/|_| |_|_|_|_| |_|\__,_/_/\_\    
 
                         vllm_for_linux setup tool
                               By ParisNeo
 ================================================================================
-EOF
+BANNER
 }
 
 print_info() { echo "[INFO] $1"; }
@@ -103,7 +103,7 @@ setup_with_uv() {
 
   print_info "Using uv-managed Python ${TARGET_PYTHON}..."
   uv python install "${TARGET_PYTHON}"
-  uv venv --python "${TARGET_PYTHON}" venv
+  uv venv --python "${TARGET_PYTHON}" --seed venv
   # shellcheck disable=SC1091
   source "$ACTIVATE_PATH"
   PYTHON_BIN="$(command -v python)"
@@ -409,7 +409,7 @@ PY
 }
 
 print_manual_uv_help() {
-  cat <<'EOF'
+  cat <<'HELP'
 ================================================================================
 uv installation required
 By ParisNeo
@@ -427,7 +427,7 @@ Or with wget:
 
 Then restart your shell if needed and run:
   ./install.sh
-EOF
+HELP
 }
 
 print_banner
@@ -483,12 +483,20 @@ else
   fi
 fi
 
-print_info "Installing required Python packages..."
-python -m pip install --upgrade pip
-python -m pip install -U \
-  vllm \
-  huggingface_hub \
-  ascii-colors
+if [ "$USE_UV" -eq 1 ]; then
+  print_info "Installing required Python packages with uv..."
+  uv pip install -U \
+    vllm \
+    huggingface_hub \
+    ascii-colors
+else
+  print_info "Installing required Python packages with pip..."
+  python -m pip install --upgrade pip
+  python -m pip install -U \
+    vllm \
+    huggingface_hub \
+    ascii-colors
+fi
 
 write_test_cuda
 
@@ -500,7 +508,7 @@ set -e
 
 echo
 if [ "$TEST_STATUS" -eq 0 ]; then
-  cat <<EOF
+  cat <<EOF2
 ================================================================================
 CUDA validation succeeded
 By ParisNeo
@@ -522,9 +530,9 @@ Optional but recommended for Hugging Face downloads:
     hf auth login
   or:
     export HF_TOKEN="hf_xxxxxxxxxxxxxxxxx"
-EOF
+EOF2
 else
-  cat <<EOF
+  cat <<EOF2
 ================================================================================
 CUDA validation reported problems
 By ParisNeo
@@ -553,5 +561,5 @@ Recommended checks:
 6. Recreate the venv if needed, then reinstall.
 
 The environment was installed, but you should fix the reported issues before using vLLM.
-EOF
+EOF2
 fi
