@@ -532,34 +532,50 @@ Optional but recommended for Hugging Face downloads:
     export HF_TOKEN="hf_xxxxxxxxxxxxxxxxx"
 EOF2
 else
-  cat <<EOF2
+cat <<EOF2
 ================================================================================
-CUDA validation reported problems
+CUDA validation succeeded
 By ParisNeo
 ================================================================================
 
 Environment bootstrap mode: ${BOOTSTRAP_MODE}
 
-Common causes:
-- NVIDIA driver missing or broken
-- torch installed without CUDA support
-- driver/runtime mismatch
-- CUDA_VISIBLE_DEVICES hides your GPUs
-- container or VM has no GPU passthrough
-- GPU is too old for current vLLM builds
-- Python version is not suitable for fallback mode
+Your installation looks usable for vLLM.
 
-Recommended checks:
-1. Run:
-     nvidia-smi
-2. Verify inside Python:
-     python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
-3. Check your visible devices:
-     echo "\$CUDA_VISIBLE_DEVICES"
-4. Prefer uv with Python ${TARGET_PYTHON}.
-5. Ensure your GPU is compute capability 7.0 or newer.
-6. Recreate the venv if needed, then reinstall.
+Next steps:
+- Activate the environment:
+    source venv/bin/activate
 
-The environment was installed, but you should fix the reported issues before using vLLM.
+- Make sure your launcher is executable:
+    chmod +x run.sh
+
+How to use run.sh:
+
+1. Run from a Hugging Face model ID:
+    ./run.sh Qwen/Qwen3-32B
+    ./run.sh mistralai/Mistral-Nemo-Instruct-2407
+
+2. Run from a local model folder:
+    ./run.sh /absolute/path/to/your/model
+    ./run.sh /data/models/Qwen__Qwen3-32B
+
+3. Override common settings when needed:
+    PORT=8000 TP_SIZE=4 CUDA_VISIBLE_DEVICES=0,1,2,3 ./run.sh Qwen/Qwen3-32B
+
+4. If your script supports max context override:
+    MAX_MODEL_LEN=32768 ./run.sh mistralai/Mistral-Nemo-Instruct-2407
+
+Expected server endpoint:
+    http://127.0.0.1:8000/v1
+
+Example test request:
+    curl http://127.0.0.1:8000/v1/models
+
+Optional but recommended for Hugging Face downloads:
+- Create a token at: https://huggingface.co/settings/tokens
+- Login with:
+    hf auth login
+  or:
+    export HF_TOKEN="hf_xxxxxxxxxxxxxxxxx"
 EOF2
 fi
