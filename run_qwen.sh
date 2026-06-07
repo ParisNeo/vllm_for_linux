@@ -55,20 +55,7 @@ COMMON_ARGS=(
   --language-model-only
 )
 
-case "${PROFILE:-text}" in
-  text)
-    exec vllm serve "${MODEL_PATH}" \
-      "${COMMON_ARGS[@]}" \
-      --language-model-only
-    ;;
-  multimodal)
-    exec vllm serve "${MODEL_PATH}" \
-      "${COMMON_ARGS[@]}" \
-      --no-enable-prefix-caching
-    ;;
-  *)
-    echo "Unknown PROFILE: ${PROFILE}" >&2
-    echo "Use PROFILE=text or PROFILE=multimodal" >&2
-    exit 1
-    ;;
+
+exec vllm serve "${MODEL_PATH}" \
+  "${COMMON_ARGS[@]}" \
 esac
