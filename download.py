@@ -30,6 +30,7 @@ def find_hf_token():
 def print_header(model: str, target: Path):
     ASCIIColors.cyan("=" * 80)
     ASCIIColors.cyan(" Hugging Face model snapshot downloader")
+    ASCIIColors.magenta(" By ParisNeo")
     ASCIIColors.cyan("=" * 80)
     ASCIIColors.white(f"Model  : {model}")
     ASCIIColors.white(f"Target : {target}")
@@ -42,25 +43,25 @@ def print_header(model: str, target: Path):
         ASCIIColors.green(f"Auth source: {token_source}")
     else:
         ASCIIColors.yellow("No Hugging Face token detected.")
-        ASCIIColors.yellow("You can still download public models, but authenticated access is recommended")
+        ASCIIColors.yellow("Public downloads still work, but authenticated access is recommended")
         ASCIIColors.yellow("for higher rate limits, more reliable downloads, and gated model access.")
         ASCIIColors.white("")
         ASCIIColors.magenta("How to create and use a token:")
         ASCIIColors.white("1. Open: https://huggingface.co/settings/tokens")
-        ASCIIColors.white("2. Create a new token, usually with read access.")
+        ASCIIColors.white("2. Create a new token with read access.")
         ASCIIColors.white("3. Export it in your shell:")
         ASCIIColors.white('   export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxx"')
         ASCIIColors.white("4. Or login once with:")
         ASCIIColors.white("   hf auth login")
         ASCIIColors.white("")
-        ASCIIColors.yellow("Tip: environment variable HF_TOKEN has priority over the cached token.")
+        ASCIIColors.yellow("Tip: HF_TOKEN overrides the cached login token.")
 
     ASCIIColors.white("")
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Download a full Hugging Face model snapshot into a local directory."
+        description="Download a Hugging Face repo snapshot into a local directory."
     )
     parser.add_argument(
         "--model",
@@ -102,7 +103,7 @@ def parse_args():
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show what would be downloaded without downloading",
+        help="Query what would be downloaded without downloading files",
     )
     return parser.parse_args()
 
@@ -116,18 +117,24 @@ def main():
 
     print_header(args.model, target)
 
-    token_source, token = find_hf_token()
+    _, token = find_hf_token()
 
     try:
         if args.dry_run:
-            ASCIIColors.blue("Dry run enabled. No files will be downloaded.")
-            ASCIIColors.blue("Requested configuration:")
-            ASCIIColors.white(f"  repo_id         : {args.model}")
-            ASCIIColors.white(f"  local_dir       : {target}")
-            ASCIIColors.white(f"  revision        : {args.revision}")
-            ASCIIColors.white(f"  repo_type       : {args.repo_type}")
-            ASCIIColors.white(f"  allow_patterns  : {args.allow_pattern}")
-            ASCIIColors.white(f"  ignore_patterns : {args.ignore_pattern}")
+            ASCIIColors.blue("Dry run enabled. Querying remote snapshot without downloading...")
+            dry_info = snapshot_download(
+                repo_id=args.model,
+                repo_type=args.repo_type,
+                revision=args.revision,
+                local_dir=str(target),
+                local_dir_use_symlinks=False,
+                allow_patterns=args.allow_pattern,
+                ignore_patterns=args.ignore_pattern,
+                token=token,
+                dry_run=True,
+            )
+            ASCIIColors.green("Dry run completed.")
+            ASCIIColors.white(str(dry_info))
             return
 
         ASCIIColors.blue("Starting snapshot download...")
@@ -157,7 +164,7 @@ def main():
         ASCIIColors.yellow("Common fixes:")
         ASCIIColors.white("- Check that the repo id is correct.")
         ASCIIColors.white("- If the model is gated/private, ensure your HF token has access.")
-        ASCIIColors.white("- Make sure you accepted the model's license page on Hugging Face.")
+        ASCIIColors.white("- Accept the model license on Hugging Face if required.")
         ASCIIColors.white("- Try setting HF_TOKEN or running: hf auth login")
         sys.exit(1)
 
