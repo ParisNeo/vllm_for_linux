@@ -1,94 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL_PATH="${1:-}"
-MODE="${MODE:-multimodal}"
+MODEL_PATH="${1:-models/Qwen__Qwen3.5-397B-A17B-GPTQ-Int4}"
+PROFILE="${PROFILE:-text}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8000}"
-DP_SIZE="${DP_SIZE:-8}"
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.85}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-262144}"
-MM_ENCODER_TP_MODE="${MM_ENCODER_TP_MODE:-data}"
-MM_PROCESSOR_CACHE_TYPE="${MM_PROCESSOR_CACHE_TYPE:-shm}"
-ENABLE_PREFIX_CACHING="${ENABLE_PREFIX_CACHING:-1}"
-ENABLE_EXPERT_PARALLEL="${ENABLE_EXPERT_PARALLEL:-1}"
-ENABLE_TOOLS="${ENABLE_TOOLS:-1}"
-DISABLE_THINKING="${DISABLE_THINKING:-0}"
-GDN_PREFILL_BACKEND="${GDN_PREFILL_BACKEND:-}"
-EXTRA_ARGS="${EXTRA_ARGS:-}"
+TP_SIZE="${TP_SIZE:-4}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-200000}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"
 
-if [[ -z "$MODEL_PATH" ]]; then
-  echo "Usage: $0 <local-model-path>"
-  exit 1
-fi
-
-if [[ -f "venv/bin/activate" ]]; then
-  # shellcheck disable=SC1091
-  source venv/bin/activate
-elif [[ -f ".venv/bin/activate" ]]; then
-  # shellcheck disable=SC1091
-  source .venv/bin/activate
-fi
-
-export VLLM_WORKER_MULTIPROC_METHOD="${VLLM_WORKER_MULTIPROC_METHOD:-spawn}"
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
-export HF_HUB_OFFLINE=1
-export TRANSFORMERS_OFFLINE=1
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
 
-MODEL_PATH="$(realpath "$MODEL_PATH")"
+echo "============================================================"
+echo " Qwen3.5-397B-A17B vLLM launcher"
+echo " Optimized for 8x H100 80GB"
+echo " Profile: ${PROFILE}"
+echo " Model: ${MODEL_PATH}"
+echo "============================================================"
 
-ARGS=(
-  --model "$MODEL_PATH"
+COMMON_ARGS=(
   --host "$HOST"
   --port "$PORT"
-  -dp "$DP_SIZE"
-  --gpu-memory-utilization "$GPU_MEM_UTIL"
+  --tensor-parallel-size "$TP_SIZE"
   --max-model-len "$MAX_MODEL_LEN"
+  --gpu-memory-utilization "$GPU_MEM_UTIL"
+  --quantization moe_wna16
+  --reasoning-parser qwen3
 )
 
-if [[ "$ENABLE_PREFIX_CACHING" == "1" ]]; then
-  ARGS+=(--enable-prefix-caching)
-fi
-
-if [[ "$ENABLE_EXPERT_PARALLEL" == "1" ]]; then
-  ARGS+=(--enable-expert-parallel)
-fi
-
-case "$MODE" in
-  multimodal|mm)
-    ARGS+=(--reasoning-parser qwen3)
-    ARGS+=(--mm-encoder-tp-mode "$MM_ENCODER_TP_MODE")
-    ARGS+=(--mm-processor-cache-type "$MM_PROCESSOR_CACHE_TYPE")
+case "$PROFILE" in
+  text)
+    exec vllm serve "$MODEL_PATH" \
+      "${COMMON_ARGS[@]}" \
+      --language-model-only
     ;;
-  text|text-only)
-    ARGS+=(--language-model-only)
+  multimodal)
+    exec vllm serve "$MODEL_PATH" \
+      "${COMMON_ARGS[@]}" \
+      --no-enable-prefix-caching
     ;;
   *)
-    echo "Invalid MODE: $MODE"
+    echo "Unknown PROFILE: $PROFILE"
+    echo "Use PROFILE=text or PROFILE=multimodal"
     exit 1
     ;;
 esac
-
-if [[ "$ENABLE_TOOLS" == "1" ]]; then
-  ARGS+=(--enable-auto-tool-choice --tool-call-parser qwen3_coder)
-fi
-
-if [[ "$DISABLE_THINKING" == "1" ]]; then
-  ARGS+=(--default-chat-template-kwargs '{"enable_thinking": false}')
-fi
-
-if [[ -n "$GDN_PREFILL_BACKEND" ]]; then
-  ARGS+=(--gdn-prefill-backend "$GDN_PREFILL_BACKEND")
-fi
-
-if [[ -n "$EXTRA_ARGS" ]]; then
-  # shellcheck disable=SC2206
-  EXTRA_SPLIT=( $EXTRA_ARGS )
-  ARGS+=("${EXTRA_SPLIT[@]}")
-fi
-
-echo "Starting with:"
-printf '  %s\n' "${ARGS[@]}"
-
-python -m vllm.entrypoints.openai.api_server "${ARGS[@]}"
