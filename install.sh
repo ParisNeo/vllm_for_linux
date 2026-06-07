@@ -172,7 +172,133 @@ def analyze_cuda_visible_devices():
         )
     else:
         info("CUDA_VISIBLE_DEVICES format looks valid.")
+def check_cuda_headers():
+    section("CUDA HEADERS")
 
+    nvcc_path = None
+    cuda_root = None
+
+    try:
+        result = subprocess.run(
+            ["which", "nvcc"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        nvcc_path = result.stdout.strip()
+        print(f"nvcc path             : {nvcc_path or 'NOT FOUND'}")
+        if nvcc_path:
+            resolved = os.path.realpath(nvcc_path)
+            print(f"nvcc realpath         : {resolved}")
+            candidate_root = Path(resolved).parent.parent
+            if candidate_root.name == "cuda" or candidate_root.name.startswith("cuda-"):
+                cuda_root = candidate_root
+                print(f"derived CUDA root     : {cuda_root}")
+    except Exception as ex:
+        warn(f"Could not resolve nvcc path: {ex}")
+
+    suspicious_headers = []
+    common_headers = [
+        Path("/usr/include/cuda.h"),
+        Path("/usr/local/include/cuda.h"),
+    ]
+
+    if cuda_root is not None:
+        common_headers.append(cuda_root / "include" / "cuda.h")
+
+    for p in common_headers:
+        try:
+            if p.exists():
+                print(f"found cuda.h          : {p}")
+                suspicious_headers.append(p)
+        except Exception as ex:
+            warn(f"Could not inspect {p}: {ex}")
+
+    try:
+        result = subprocess.run(
+            [
+                "find",
+                "/usr/include",
+                "/usr/local/include",
+                "-maxdepth", "2",
+                "(",
+                "-name", "cuda.h",
+                "-o",
+                "-path", "*/cuda*/include",
+                ")",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        extra = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        if extra:
+            print("additional header-related paths:")
+            for line in extra:
+                print(f"  {line}")
+    except Exception as ex:
+        warn(f"Header scan failed: {ex}")
+
+    usr_include_cuda = Path("/usr/include/cuda.h")
+    if usr_include_cuda.exists():
+        warn("/usr/include/cuda.h exists. This often comes from distro CUDA packages and can conflict with /usr/local CUDA toolkits.")
+        try:
+            result = subprocess.run(
+                ["dpkg", "-S", str(usr_include_cuda)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            owner = result.stdout.strip()
+            if owner:
+                print(f"/usr/include/cuda.h owner : {owner}")
+        except Exception as ex:
+            warn(f"Could not query dpkg owner for /usr/include/cuda.h: {ex}")
+
+    if cuda_root is not None:
+        expected = cuda_root / "include" / "cuda.h"
+        print(f"expected toolkit header: {expected}")
+        if not expected.exists():
+            error(f"Expected CUDA header not found under active toolkit root: {expected}")
+
+    print()
+    print("nvcc include probe:")
+    try:
+        probe = subprocess.run(
+            ["nvcc", "-E", "-x", "cu", "-", "-v"],
+            input="#include <cuda.h>\n",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        combined = (probe.stdout or "") + "\n" + (probe.stderr or "")
+        lines = [line.rstrip() for line in combined.splitlines()]
+
+        interesting = []
+        for line in lines:
+            low = line.lower()
+            if (
+                "include" in low
+                or "cuda.h" in low
+                or "/usr/include" in low
+                or "/usr/local/cuda" in low
+            ):
+                interesting.append(line)
+
+        for line in interesting[:120]:
+            print(line)
+
+        if "/usr/include/cuda.h" in combined:
+            warn("nvcc probe output references /usr/include/cuda.h, which is a common source of header/toolkit mismatches.")
+
+        if cuda_root is not None:
+            cuda_root_str = str(cuda_root)
+            if cuda_root_str not in combined:
+                warn(f"nvcc verbose probe did not clearly reference the active CUDA root {cuda_root_str}. Check include ordering manually.")
+
+    except Exception as ex:
+        warn(f"nvcc include probe failed: {ex}")
+        
 def check_python_runtime():
     section("PYTHON RUNTIME")
     print(f"Python executable : {sys.executable}")
@@ -366,7 +492,8 @@ except Exception as ex:
 print()
 check_nvcc()
 print()
-
+check_cuda_headers()
+print()
 section("DIAGNOSIS")
 if not nvidia_smi_ok:
     print("- NVIDIA driver tools are not working.")
