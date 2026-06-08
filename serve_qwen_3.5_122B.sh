@@ -7,8 +7,15 @@ DEFAULT_LOCAL_MODEL="models/Qwen__Qwen3.5-122B-A10B-GPTQ-Int4"
 
 MODEL_PATH="${1:-}"
 TP_SIZE="${TP_SIZE:-4}"
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.94}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.85}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-128000}"
+
+# NCCL stability settings for multi-GPU communication
+export NCCL_ALGO="Ring"
+export NCCL_NET_GDR_LEVEL="2"
+export NCCL_P2P_LEVEL="2"
+export NCCL_SOCKET_IFNAME="lo"
+export NCCL_DEBUG="${NCCL_DEBUG:-WARN}"
 
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then
   source "${VENV_DIR}/bin/activate"
@@ -54,8 +61,9 @@ exec vllm serve "${MODEL_PATH}" \
   --tensor-parallel-size "${TP_SIZE}" \
   --max-model-len "${MAX_MODEL_LEN}" \
   --gpu-memory-utilization "${GPU_MEM_UTIL}" \
-  # --reasoning-parser qwen3 \
-  --chat-template-kwargs '{"enable_thinking":false}'
+  --chat-template-kwargs '{"enable_thinking":false}' \
   --language-model-only \
   --enable-prefix-caching \
-  --disable-custom-all-reduce
+  --disable-custom-all-reduce \
+  --enforce-eager \
+  --distributed-executor-backend mp
