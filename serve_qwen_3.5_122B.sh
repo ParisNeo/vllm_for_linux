@@ -7,7 +7,7 @@ DEFAULT_LOCAL_MODEL="models/Qwen__Qwen3.5-122B-A10B-GPTQ-Int4"
 
 MODEL_PATH="${1:-}"
 TP_SIZE="${TP_SIZE:-4}"
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.40}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.50}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-128000}"
 
 # NCCL stability settings for multi-GPU communication
@@ -64,8 +64,9 @@ echo " TP_SIZE: ${TP_SIZE}"
 echo " GPU_MEM_UTIL: ${GPU_MEM_UTIL}"
 echo "============================================================"
 echo ""
-echo "⚠️  NOTE: GPU_MEM_UTIL reduced to ${GPU_MEM_UTIL} due to limited free memory"
-echo "   If you need more memory, kill other GPU processes first."
+echo "⚠️  NOTE: GPU_MEM_UTIL set to ${GPU_MEM_UTIL} for optimal KV cache allocation"
+echo "   vLLM recommends minimum 0.46 when CUDA graph profiling is enabled."
+echo "   If you encounter OOM errors, kill other GPU processes or reduce this value."
 echo ""
 
 # Check available GPU memory before launching
