@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${ROOT_DIR}/venv"
 DOWNLOAD_SCRIPT="${ROOT_DIR}/download.sh"
-DEFAULT_LOCAL_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.6-27B-FP8"
+DEFAULT_LOCAL_MODEL="models/Qwen__Qwen3.6-27B-INT4"
 
 MODEL_PATH="${1:-}"
 
@@ -21,12 +21,12 @@ if [[ -z "${MODEL_PATH}" ]]; then
     MODEL_PATH="${DEFAULT_LOCAL_MODEL}"
     echo "No model supplied; using local model at: ${MODEL_PATH}"
   else
-    echo "Local Qwen3.6 model not found at:" >&2
+    echo "Local Qwen3.6 INT4 model not found at:" >&2
     echo "  ${DEFAULT_LOCAL_MODEL}" >&2
     echo "" >&2
     echo "Please download it first by running:" >&2
     echo "  chmod +x download.sh" >&2
-    echo "  ./download.sh --model Qwen/Qwen3.6-27B-FP8" >&2
+    echo "  ./download.sh --model Qwen/Qwen3.6-27B-INT4" >&2
     echo "" >&2
     echo "Then re-run:" >&2
     echo "  ./serve_qwen36.sh" >&2
