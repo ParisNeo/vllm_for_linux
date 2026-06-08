@@ -9,6 +9,9 @@ MODEL_PATH="${1:-}"
 TP_SIZE="${TP_SIZE:-4}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.60}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-128000}"
+# Mamba architecture requires 1 cache block per sequence
+# At 60% GPU utilization: ~161 blocks available, using 128 for safety margin
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-128}"
 
 # NCCL stability settings for multi-GPU communication
 export NCCL_ALGO="Ring"
@@ -62,6 +65,7 @@ echo " Default max_model_len: ${MAX_MODEL_LEN}"
 echo " Model: ${MODEL_PATH}"
 echo " TP_SIZE: ${TP_SIZE}"
 echo " GPU_MEM_UTIL: ${GPU_MEM_UTIL}"
+echo " MAX_NUM_SEQS: ${MAX_NUM_SEQS} (limited by Mamba cache blocks)"
 echo "============================================================"
 echo ""
 echo "⚠️  NOTE: GPU_MEM_UTIL set to ${GPU_MEM_UTIL} for optimal KV cache allocation"
@@ -103,5 +107,5 @@ exec vllm serve "${MODEL_PATH}" \
   --disable-custom-all-reduce \
   --distributed-executor-backend mp \
   --max-num-batched-tokens 8192 \
-  --max-num-seqs 256 \
+  --max-num-seqs "${MAX_NUM_SEQS}" \
   --scheduling-policy "fcfs"
