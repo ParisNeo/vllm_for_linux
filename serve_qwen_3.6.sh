@@ -53,3 +53,4 @@ exec vllm serve "${MODEL_PATH}" \
   --reasoning-parser qwen3 \
   --language-model-only \
   --enable-prefix-caching
+  --disable-custom-all-reduce
