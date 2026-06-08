@@ -6,6 +6,9 @@ VENV_DIR="${ROOT_DIR}/venv"
 DEFAULT_LOCAL_MODEL="models/Qwen__Qwen3.6-27B"
 
 MODEL_PATH="${1:-}"
+TP_SIZE="${TP_SIZE:-2}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.94}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-262144}"
 
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then
   source "${VENV_DIR}/bin/activate"
@@ -39,16 +42,18 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 echo "============================================================"
 echo " Qwen3.6 text-only vLLM launcher"
 echo " Optimized for 4x A100 40GB"
-echo " Default max_model_len: ${MAX_MODEL_LEN:-262144}"
+echo " Default max_model_len: ${MAX_MODEL_LEN}"
 echo " Model: ${MODEL_PATH}"
+echo " TP_SIZE: ${TP_SIZE}"
+echo " GPU_MEM_UTIL: ${GPU_MEM_UTIL}"
 echo "============================================================"
 
 exec vllm serve "${MODEL_PATH}" \
   --host "${HOST:-127.0.0.1}" \
   --port "${PORT:-8000}" \
-  --tensor-parallel-size "${TP_SIZE:-2}" \
-  --max-model-len "${MAX_MODEL_LEN:-262144}" \
-  --gpu-memory-utilization "${GPU_MEM_UTIL:-0.88}" \
+  --tensor-parallel-size "${TP_SIZE}" \
+  --max-model-len "${MAX_MODEL_LEN}" \
+  --gpu-memory-utilization "${GPU_MEM_UTIL}" \
   --reasoning-parser qwen3 \
   --language-model-only \
   --enable-prefix-caching \
