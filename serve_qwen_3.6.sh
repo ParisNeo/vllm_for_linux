@@ -8,7 +8,7 @@ DEFAULT_LOCAL_MODEL="models/Qwen__Qwen3.6-27B"
 MODEL_PATH="${1:-}"
 TP_SIZE="${TP_SIZE:-2}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.94}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-262144}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-128000}"
 
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then
   source "${VENV_DIR}/bin/activate"
