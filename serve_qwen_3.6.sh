@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${ROOT_DIR}/venv"
 DOWNLOAD_SCRIPT="${ROOT_DIR}/download.sh"
-DEFAULT_LOCAL_MODEL="models/Qwen__Qwen3.6-27B-INT4"
+DEFAULT_LOCAL_MODEL="models/Qwen__Qwen3.6-27B"
 
 MODEL_PATH="${1:-}"
 
@@ -26,7 +26,7 @@ if [[ -z "${MODEL_PATH}" ]]; then
     echo "" >&2
     echo "Please download it first by running:" >&2
     echo "  chmod +x download.sh" >&2
-    echo "  ./download.sh --model Qwen/Qwen3.6-27B-INT4" >&2
+    echo "  ./download.sh --model Qwen/Qwen3.6-27B" >&2
     echo "" >&2
     echo "Then re-run:" >&2
     echo "  ./serve_qwen36.sh" >&2
