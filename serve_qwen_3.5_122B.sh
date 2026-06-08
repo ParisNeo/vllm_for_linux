@@ -46,8 +46,11 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 
+# Performance tuning: allow larger batches for better GPU utilization
+export VLLM_BATCH_SIZE="${VLLM_BATCH_SIZE:-256}"
+
 echo "============================================================"
-echo " Qwen3.6 text-only vLLM launcher"
+echo " Qwen3.5 122B MoE vLLM launcher"
 echo " Optimized for 4x A100 40GB"
 echo " Default max_model_len: ${MAX_MODEL_LEN}"
 echo " Model: ${MODEL_PATH}"
@@ -64,5 +67,7 @@ exec vllm serve "${MODEL_PATH}" \
   --language-model-only \
   --enable-prefix-caching \
   --disable-custom-all-reduce \
-  --enforce-eager \
-  --distributed-executor-backend mp
+  --distributed-executor-backend mp \
+  --max-num-batched-tokens 8192 \
+  --max-num-seqs 256 \
+  --scheduling-policy "fcfs"
