@@ -1,8 +1,5 @@
 # vllm_for_linux
 
-
-
-
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/ParisNeo/vllm_for_linux/blob/main/LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Ubuntu-orange.svg)](https://ubuntu.com/)
 [![Python](https://img.shields.io/badge/Python-3.9--3.12-blue.svg)](https://www.python.org/)
@@ -11,319 +8,365 @@
 
 <img width="1693" height="929" alt="image" src="https://github.com/user-attachments/assets/285ea1be-1950-42be-a198-ae3650c4eda5" />
 
+## 🚀 Overview
 
+`vllm_for_linux` is an intelligent model serving toolkit for Linux that automatically analyzes your GPU cluster, calculates optimal configurations, and generates reproducible runner scripts for production deployments.
 
-A practical Linux setup toolkit for serving LLMs with **vLLM**, downloading models from Hugging Face into deterministic local folders, validating CUDA, and launching many model families from either local paths or Hub repositories.
-
-> By ParisNeo
-
-## Overview
-
-`vllm_for_linux` is a small utility bundle for people who want reproducible, local-first, scriptable vLLM deployments on Linux without constantly rebuilding the same shell snippets.
-
-It is designed for workstation and server environments where you want to:
-
-- control exactly where models are downloaded,
-- validate the CUDA stack before wasting time on broken launches,
-- run models from either local folders or Hub IDs,
-- keep launch scripts readable and adjustable per model family,
-- work online for downloads and then switch to offline local serving.
-
-## What it does
-
-The toolkit focuses on a few practical tasks that usually get repeated in every fresh deployment:
-
-- Bootstrapping a clean Python environment.
-- Installing `vllm`, `huggingface_hub`, and `ascii-colors`.
-- Downloading models from Hugging Face into local folders you choose.
-- Validating NVIDIA driver, CUDA, PyTorch, and GPU visibility.
-- Serving models from local paths or directly from the Hub.
-- Supporting model-specific startup flags for families like Qwen, DeepSeek, and Mistral.
-- Making it easier to clear caches and retry clean rebuilds when kernels or compiled artifacts go bad.
-
-## Workflow
-
-The project follows a simple and practical flow:
-
-1. Install the environment with `install.sh`.
-2. Validate CUDA with `test_cuda.py`.
-3. Download a model snapshot locally into your `models/` directory.
-4. Start the vLLM OpenAI-compatible server with the appropriate launcher.
-5. Connect your client app, agent, or benchmark tool to the exposed API endpoint.
-
-A common pattern is to download once from the Hub, store the snapshot in a project-controlled folder, and then serve from that local path with offline mode enabled.
-
-## Project layout
-
-```text
-vllm_for_linux/
-├── install.sh
-├── test_cuda.py
-├── download_model.py
-├── serve_model.sh
-├── run_qwen.sh
-├── clear.sh
-└── README.md
-```
-
-## Features
+### Key Features
 
 | Feature | Description |
-|---|---|
-| Environment bootstrap | Uses `uv` when available and can fall back to `python -m venv` when needed. |
-| Python handling | Prefers a managed Python runtime through `uv` for better reproducibility. |
-| CUDA validation | Checks `nvidia-smi`, `libcuda`, PyTorch CUDA support, GPU count, compute capability, and a real CUDA matmul test. |
-| Hugging Face downloads | Downloads full model snapshots into deterministic local directories instead of relying on opaque cache locations. |
-| Local-first serving | Lets you serve models from absolute local folders after download, which is useful for offline or controlled deployments. |
-| Token guidance | Explains how to configure `HF_TOKEN` for gated models, higher limits, and more reliable downloads. |
-| Model launcher | Supports local model paths and Hub repo IDs. |
-| Family-aware serving | Can attach model-specific options such as reasoning parsers and Mistral loader settings. |
-| Qwen launcher | Includes a Qwen-oriented launcher with multimodal and text-only modes based on the official vLLM recipe. |
-| Cache reset support | Makes it easy to clear vLLM, Torch, and related caches so kernels and compiled artifacts rebuild cleanly. |
-| CLI-friendly UX | Uses `ascii-colors` banners and readable console diagnostics. |
+|---------|-------------|
+| **Smart GPU Analysis** | Auto-detects free/busy GPUs and excludes occupied ones |
+| **Auto-Optimization** | Calculates optimal TP_SIZE and GPU memory utilization |
+| **Configuration Caching** | Saves working configs for 7 days to skip re-optimization |
+| **Auto-Runner Generation** | Creates bash scripts with baked-in settings on success |
+| **Multi-Server Support** | Run multiple models on different ports/GPUs simultaneously |
+| **Fallback Retry Logic** | Progressively reduces memory utilization on OOM errors |
+| **Multimodal Detection** | Auto-enables vision features for multimodal models |
+| **Reasoning Parser Auto-Detect** | Applies correct parser for Gemma-4, Qwen3, DeepSeek-R1, etc. |
 
-## Requirements
+---
 
-- Linux
-- NVIDIA GPU and working NVIDIA driver
-- CUDA-compatible PyTorch runtime
-- Python 3.10+ for fallback mode, with `uv` preferred for managing the right Python version
-- Internet access for first-time package and model downloads, unless you work only from pre-downloaded local assets
-- Sufficient GPU memory for the chosen model and parallelism strategy
-
-For larger models, also ensure that your chosen tensor parallel or data parallel layout matches the number of visible GPUs and that your system has enough VRAM headroom for weights, KV cache, and multimodal encoder overhead.
-
-## Installation
-
-### Recommended
+## 📦 Installation
 
 ```bash
 chmod +x install.sh
 ./install.sh
 ```
 
-This installer:
+This will:
+- Create a Python virtual environment
+- Install vLLM and dependencies
+- Validate your CUDA setup
+- Run a GPU health check
 
-- Uses `uv` if it is available.
-- Tries to install `uv` automatically if it is missing.
-- Falls back to `python -m venv` when possible.
-- Installs the required Python packages.
-- Runs a CUDA validation pass at the end.
+---
 
-### Manual environment setup
+## 🎯 Quick Start
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -U vllm huggingface_hub ascii-colors
+# 1. Serve a model (auto-optimizes and creates runner)
+bash serve_model.sh --model models/google__gemma-4-31B-it/
+
+# 2. Run the generated runner for faster startup next time
+bash runners/google__gemma-4-31B-it_port8000.sh
+
+# 3. Check what's running
+nvidia-smi
 ```
 
-If you are pinning versions for stability, this is the right place to freeze `vllm`, `torch`, and `flashinfer` to combinations you have validated on your target machine.
+---
 
-## CUDA validation
+## 🔧 Smart Serving System
 
-After installation, the toolkit runs `test_cuda.py` to verify that the machine is ready.
+### How It Works
 
-It checks:
-
-- Python runtime information
-- `CUDA_VISIBLE_DEVICES`
-- `nvidia-smi`
-- NVIDIA driver visibility
-- `/dev/nvidia*` devices
-- `torch.cuda.is_available()`
-- GPU count and compute capability
-- Real CUDA tensor computation
-- `libcuda.so` visibility through `ldconfig`
-
-If something is broken, the script prints targeted advice instead of failing silently. This helps distinguish between driver issues, PyTorch build problems, hidden GPUs, and library path problems.
-
-## Downloading models
-
-```bash
-source venv/bin/activate
-python download_model.py --model mistralai/Mistral-7B-Instruct-v0.2 --dir models
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. GPU Detection                                               │
+│     └─> Query all GPUs via nvidia-smi                          │
+│     └─> Filter out busy GPUs (<10 GB free by default)          │
+│                                                                 │
+│  2. Model Analysis                                              │
+│     └─> Read config.json for parameter count                   │
+│     └─> Detect multimodal capabilities                         │
+│     └─> Estimate memory requirements (BF16 + overhead)         │
+│                                                                 │
+│  3. Configuration Calculation                                   │
+│     └─> Try TP sizes from N GPUs down to 1                     │
+│     └─> Use MINIMUM free memory (not average)                  │
+│     └─> Add 10% safety margin                                  │
+│                                                                 │
+│  4. Launch with Fallback                                        │
+│     └─> Try optimal config first                               │
+│     └─> On OOM: reduce utilization by 10% and retry            │
+│     └─> On success: save config to cache + generate runner     │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-A key design goal is that model snapshots are downloaded to folders you control rather than being left only inside Hugging Face cache directories. This makes storage management, backup, offline reuse, and cleanup much easier.
-
-### With authentication
+### Command Reference
 
 ```bash
+bash serve_model.sh --model <path> [options]
+```
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `--model PATH` | Model directory or HuggingFace repo ID | **Required** |
+| `--port PORT` | Server port | `8000` |
+| `--host HOST` | Server host | `127.0.0.1` |
+| `--name NAME` | Custom runner name | Auto-generated |
+| `--gpus IDS` | Comma-separated GPU IDs (e.g., `0,1,2,3`) | Auto-select |
+| `--max-util FLOAT` | Maximum GPU memory utilization | `0.90` |
+| `--min-free-gb FLOAT` | Minimum free GPU memory to consider GPU available | `10.0` |
+| `--tp-size INT` | Force specific tensor parallelism | Auto-calculate |
+| `--no-multimodal` | Disable multimodal features | Enabled if detected |
+| `--no-reasoning` | Disable reasoning parser | Enabled if detected |
+| `--no-fallback` | Disable progressive fallback on OOM | Enabled |
+| `--no-auto-runner` | Disable automatic runner generation | Enabled |
+| `--reset-config` | Reset cached configuration and re-optimize | Use cache |
+| `--dry-run` | Show configuration without launching | Execute |
+| `--manual` | Use environment variables instead of auto-config | Smart mode |
+| `--help` | Show help message | - |
+
+### Examples
+
+```bash
+# Auto-optimize (recommended)
+bash serve_model.sh --model models/google__gemma-4-31B-it/
+
+# Custom port and host
+bash serve_model.sh --model models/llama-3.1-8b/ --port 8001 --host 0.0.0.0
+
+# Use specific GPUs only
+bash serve_model.sh --model models/llama-3.1-8b/ --gpus 4,5,6
+
+# Conservative memory usage
+bash serve_model.sh --model models/large-model/ --max-util 0.70
+
+# Disable multimodal for vision model
+bash serve_model.sh --model llava-1.5-13b --no-multimodal
+
+# Force re-optimization (ignore cache)
+bash serve_model.sh --model models/llama-3.1-8b/ --reset-config
+
+# Dry run to preview configuration
+bash serve_model.sh --model models/llama-3.1-8b/ --dry-run
+
+# Manual mode with environment variables
+GPU_MEM_UTIL=0.70 TP_SIZE=4 bash serve_model.sh --manual --model models/llama-3.1-8b/
+```
+
+---
+
+## 🏃 Runner System
+
+### What Are Runners?
+
+Runners are bash scripts with all settings **baked in** for reproducible, consistent deployments. They're stored in `runners/` (gitignored) and can be executed directly without re-optimization.
+
+### Auto-Generated Runners
+
+When a model server starts successfully, a runner is automatically created:
+
+```bash
+bash serve_model.sh --model models/google__gemma-4-31B-it/
+# Creates: runners/google__gemma-4-31B-it_port8000.sh
+```
+
+### Custom Runner Names
+
+```bash
+bash serve_model.sh --model models/google__gemma-4-31B-it/ --name gemma_prod
+# Creates: runners/gemma_prod.sh
+```
+
+### Generated Runner Example
+
+```bash
+#!/usr/bin/env bash
+# Runner: gemma_prod
+# Model: models/google__gemma-4-31B-it/
+# Port: 8000
+# Host: 127.0.0.1
+# GPUs: 4,5,6,7
+# TP Size: 4
+# GPU Memory Util: 0.50
+# Created: 2026-06-09 16:45:00
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+exec python smart_serve.py \
+  --model "models/google__gemma-4-31B-it/" \
+  --host "127.0.0.1" \
+  --port "8000" \
+  --gpus "4,5,6,7" \
+  --max-util "0.90" \
+  --min-free-gb "10.0" \
+  --no-auto-runner
+```
+
+### Runner Management
+
+```bash
+# List all runners
+ls -la runners/*.sh
+
+# Run a specific runner
+bash runners/gemma_prod.sh
+
+# Delete a runner
+rm runners/old_model.sh
+
+# Regenerate with new settings
+bash serve_model.sh --model models/google__gemma-4-31B-it/ --name gemma_prod --port 8005 --reset-config
+```
+
+---
+
+## 🖥️ Multi-Server Deployment
+
+### Running Multiple Models Simultaneously
+
+```bash
+# Server 1 - Gemma on port 8000 (GPUs 4,5,6,7)
+bash serve_model.sh --model models/google__gemma-4-31B-it/ --name gemma_8000 --port 8000 --gpus 4,5,6,7 &
+
+# Server 2 - Llama on port 8001 (GPUs 0,1,2,3)
+bash serve_model.sh --model models/llama-3.1-8b/ --name llama_8001 --port 8001 --gpus 0,1,2,3 &
+
+# Check running servers
+ps aux | grep vllm
+
+# Stop a specific server
+pkill -f "port 8000"
+```
+
+### GPU Planning Table
+
+| Server | Model | Port | GPUs | TP Size | Memory Util |
+|--------|-------|------|------|---------|-------------|
+| 1 | Gemma-4-31B | 8000 | 4,5,6,7 | 4 | 0.50 |
+| 2 | Llama-3.1-8B | 8001 | 0,1,2,3 | 4 | 0.65 |
+| 3 | Qwen3-32B | 8002 | 4,5 | 2 | 0.75 |
+
+---
+
+## 🧠 Configuration Caching
+
+Working configurations are cached in `~/.smart_serve/config_cache.json`:
+
+- **Valid for 7 days** or until GPU configuration changes
+- **Skips re-optimization** on subsequent launches
+- **Auto-invalidated** if model config.json changes
+
+```bash
+# View cache
+cat ~/.smart_serve/config_cache.json
+
+# Clear cache for a specific model
+bash serve_model.sh --model models/llama-3.1-8b/ --reset-config
+
+# Clear all caches
+rm ~/.smart_serve/config_cache.json
+```
+
+---
+
+## 🔍 Supported Model Families
+
+| Family | Auto-Detect | Reasoning Parser | Notes |
+|--------|-------------|------------------|-------|
+| **Gemma-4** | ✅ | `gemma4` | Multimodal support |
+| **Qwen3** | ✅ | `qwen3` | Reasoning-capable variants |
+| **DeepSeek-R1** | ✅ | `deepseek_r1` | Reasoning parser |
+| **GLM-4.5** | ✅ | `glm45` | Reasoning parser |
+| **Mistral** | ✅ | `mistral` | Custom tokenizer/loader |
+| **Magistral** | ✅ | `mistral` | Reasoning parser |
+| **Llama-3** | ✅ | - | Standard deployment |
+| **LLaVA** | ✅ | - | Multimodal auto-detect |
+| **Other** | ⚠️ | - | Falls back to defaults |
+
+---
+
+## 🛠️ Troubleshooting
+
+| Problem | Likely Cause | Solution |
+|---------|--------------|----------|
+| `Free memory on device cuda:X is less than desired` | GPU busy or utilization too high | Use `--gpus` to select free GPUs, or lower `--max-util` |
+| `WorkerProc failed to start` | OOM during initialization | Run with `--min-free-gb 20` to exclude busy GPUs |
+| `nvidia-smi not available` | NVIDIA driver missing | Install or repair NVIDIA drivers |
+| `torch.cuda.is_available() is False` | CUDA runtime mismatch | Reinstall venv, validate CUDA stack |
+| `Zero visible GPUs` | GPUs masked by other processes | Check `CUDA_VISIBLE_DEVICES`, use `--gpus` to specify |
+| Model download denied | Missing HF token | Set `HF_TOKEN` or run `hf auth login` |
+| vLLM startup fails on model quirks | Missing family-specific args | Use `--no-reasoning` or `--no-multimodal` |
+| Startup fails after version changes | Stale caches | Clear `~/.smart_serve/config_cache.json` |
+| Parallelism error at startup | TP size doesn't match visible GPUs | Check `--gpus` and `--tp-size` alignment |
+
+### Quick Diagnostics
+
+```bash
+# Check GPU status
+nvidia-smi
+
+# Check which GPUs are free
+bash serve_model.sh --model test --dry-run
+
+# View smart serve logs
+tail -f ~/.smart_serve/smart_serve.log
+
+# Test CUDA setup
+python test_cuda.py
+```
+
+---
+
+## 📁 Project Structure
+
+```
+vllm_for_linux/
+├── install.sh              # Environment bootstrap
+├── test_cuda.py            # CUDA validation
+├── download_model.py       # HuggingFace model downloader
+├── serve_model.sh          # Smart model server launcher
+├── smart_serve.py          # GPU analyzer and optimizer
+├── create_runner.py        # Runner script generator
+├── clear.sh                # Cache cleanup utility
+├── runners/                # Auto-generated runners (gitignored)
+│   └── .gitkeep
+├── models/                 # Downloaded model snapshots
+├── venv/                   # Python virtual environment
+└── README.md               # This file
+```
+
+---
+
+## 🔐 Hugging Face Token Setup
+
+For gated models and better rate limits:
+
+```bash
+# Option 1: Environment variable
 export HF_TOKEN="hf_xxxxxxxxxxxxxxxxx"
-python download_model.py --model meta-llama/Llama-3.1-8B-Instruct --dir models
-```
 
-### Dry run
-
-```bash
-python download_model.py --model Qwen/Qwen3-32B --dir models --dry-run
-```
-
-### Local snapshot strategy
-
-A practical workflow is:
-
-1. Download once from the Hub into `models/YourModelName`.
-2. Verify the files exist locally.
-3. Serve using the local absolute path.
-4. Enable offline mode for serving.
-
-That approach avoids unpredictable cache-only behavior and gives full control over where large model files live.
-
-## Serving models
-
-```bash
-source venv/bin/activate
-./serve_model.sh Qwen/Qwen3-32B
-```
-
-### Local model path
-
-```bash
-./serve_model.sh /absolute/path/to/models/Qwen__Qwen3-32B
-```
-
-### Example environment overrides
-
-```bash
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-export TP_SIZE=4
-export PORT=8000
-export MAX_MODEL_LEN=32768
-./serve_model.sh mistralai/Mistral-Nemo-Instruct-2407
-```
-
-The launcher is intended to remain simple while still supporting practical overrides for port, GPU visibility, model length, tensor parallel size, and model-family-specific arguments.
-
-## Qwen multimodal launcher
-
-The project can also include a Qwen-specific launcher such as `run_qwen.sh` based on the official vLLM recipe.
-
-Example local multimodal run:
-
-```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
-DP_SIZE=8 \
-./run_qwen.sh /data/vllm_for_linux/models/Qwen__Qwen3.5-397B-A17B-FP8
-```
-
-Example local text-only mode:
-
-```bash
-MODE=text \
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
-DP_SIZE=8 \
-./run_qwen.sh /data/vllm_for_linux/models/Qwen__Qwen3.5-397B-A17B-FP8
-```
-
-This split is useful because Qwen3.5 models are multimodal by design, but for pure text serving you may want to skip the vision path and recover memory for more KV cache.
-
-## Supported model families
-
-| Family | Notes |
-|---|---|
-| Qwen | Can use Qwen reasoning parser for supported reasoning-capable variants and may need multimodal-aware launcher settings. |
-| DeepSeek | Can attach DeepSeek R1 reasoning parser when applicable. |
-| Mistral | Can use Mistral tokenizer, config, or loader settings for Mistral-family models. |
-| Local mirrored models | Works with absolute local paths for offline or air-gapped setups. |
-| Other Hub models | Can be added with simple preset logic as long as their vLLM requirements are known. |
-
-## Hugging Face token setup
-
-Public models can often be downloaded without authentication, but using a token is still recommended.
-
-Why use `HF_TOKEN`:
-
-- Better rate limits
-- More reliable downloads
-- Access to gated or private repositories you are authorized for
-- Cleaner automation on servers and CI-style setups
-
-Create a token here:
-
-- [Hugging Face Access Tokens](https://huggingface.co/settings/tokens)
-
-Then either:
-
-```bash
-export HF_TOKEN="hf_xxxxxxxxxxxxxxxxx"
-```
-
-or:
-
-```bash
+# Option 2: Interactive login
 hf auth login
+
+# Option 3: Login with token
+hf auth login --token hf_xxxxxxxxxxxxxxxxx
 ```
 
-If you are downloading large gated models, also make sure you have accepted the model terms on the model page before scripting the download.
+---
 
-## Example API launch
+## 🤝 Contributing
 
-```bash
-python -m vllm.entrypoints.openai.api_server \
-  --model mistralai/Mistral-7B-Instruct-v0.2 \
-  --host 127.0.0.1 \
-  --port 8000
-```
+Contributions are welcome! Good targets include:
 
-After the server starts, you can use OpenAI-compatible clients by pointing them at `http://127.0.0.1:8000/v1` or the host and port you configured.
+- New model-family presets
+- Better GPU allocation algorithms
+- Improved diagnostics and logging
+- Version pinning matrices
+- Documentation improvements
+- Reproducible bugfixes
 
-## Cache clearing and rebuilds
+**When submitting a PR, please include:**
+- GPU model and count
+- CUDA version
+- PyTorch version
+- vLLM version
+- Steps to reproduce (if bugfix)
 
-When debugging broken kernels, stale compiled artifacts, or incompatible runtime caches, it is often useful to wipe cached state and force a full rebuild.
+---
 
-A helper script such as `clear.sh` can remove:
-
-- `~/.cache/vllm`
-- `~/.cache/torch`
-- `~/.cache/flashinfer`
-- temporary or compiled vLLM artifacts
-
-This is especially useful after changing CUDA, PyTorch, vLLM, or FlashInfer versions.
-
-## Troubleshooting
-
-| Problem | Likely cause | What to check |
-|---|---|---|
-| `nvidia-smi` fails | Driver missing or broken | Reinstall or repair NVIDIA drivers |
-| `torch.cuda.is_available()` is `False` | CUDA runtime mismatch, wrong wheel, or hidden devices | Check driver, PyTorch build, and `CUDA_VISIBLE_DEVICES` |
-| Zero visible GPUs | Masked devices or missing passthrough | Check environment variables, container runtime, and VM GPU mapping |
-| CUDA test fails | Driver/runtime incompatibility | Recreate the venv and validate the CUDA stack again |
-| Model download denied | Missing token or missing access approval | Set `HF_TOKEN` and accept model terms on Hugging Face |
-| vLLM startup fails on model family quirks | Missing family-specific arguments | Extend `serve_model.sh` preset logic |
-| Startup fails after version changes | Stale compiled kernels or caches | Clear vLLM, Torch, and FlashInfer caches and rebuild |
-| Parallelism error at startup | TP or DP size does not match visible GPUs | Check `CUDA_VISIBLE_DEVICES`, `TP_SIZE`, `DP_SIZE`, and model launcher settings |
-
-## Roadmap
-
-- Add more family presets such as Llama, Phi, Granite, and EXAONE.
-- Add YAML-based model presets.
-- Add health checks and structured logs for the server launcher.
-- Add optional Docker-based deployment helpers.
-- Add a generated architecture infographic for the README.
-- Add version pin presets for known-good `torch` + `vllm` + `flashinfer` combinations.
-
-## Contributing
-
-Contributions are welcome.
-
-Good contribution targets include:
-
-- new model-family presets,
-- cleaner install flows,
-- better diagnostics,
-- version pinning matrices,
-- documentation improvements,
-- reproducible bugfixes for launch scripts.
-
-If you open a PR, try to include the tested environment details, especially GPU model, CUDA version, PyTorch version, and vLLM version.
-
-## Credits
-
-Created by **ParisNeo**.
-
-## License
+## 📄 License
 
 This project is licensed under the **Apache 2.0 License**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Credits
+
+Created by **ParisNeo**
+
+Built with ❤️ for the open-source AI community
