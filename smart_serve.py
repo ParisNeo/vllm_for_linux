@@ -49,11 +49,58 @@ def get_gpu_info() -> List[Dict]:
         print("⚠️  Warning: nvidia-smi not available. Assuming single GPU with 24GB.", file=sys.stderr)
         return [{"index": 0, "total_mb": 24576, "free_mb": 20000, "name": "Unknown"}]
 
-def filter_gpus(gpus: List[Dict], gpu_ids: Optional[List[int]]) -> List[Dict]:
-    """Filter GPUs by user-specified IDs."""
-    if gpu_ids is None:
-        return gpus
-    return [g for g in gpus if g["index"] in gpu_ids]
+def filter_gpus(
+    gpus: List[Dict], 
+    gpu_ids: Optional[List[int]],
+    min_free_gb: float = 10.0,
+    include_busy: bool = False
+) -> List[Dict]:
+    """
+    Filter GPUs by user-specified IDs and minimum free memory.
+    
+    Args:
+        gpus: List of GPU info dicts
+        gpu_ids: User-specified GPU IDs (None = auto-select)
+        min_free_gb: Minimum free memory in GB (default: 10.0)
+        include_busy: If True, don't filter by free memory
+    
+    Returns:
+        Filtered list of GPUs
+    """
+    # First filter by user-specified IDs if provided
+    if gpu_ids is not None:
+        filtered = [g for g in gpus if g["index"] in gpu_ids]
+        if len(filtered) == 0:
+            print(f"❌ Error: No GPUs found matching IDs: {gpu_ids}", file=sys.stderr)
+            sys.exit(1)
+        gpus = filtered
+    
+    # Then filter by free memory (unless overridden)
+    if not include_busy:
+        busy_gpus = [g for g in gpus if g["free_mb"] / 1024 < min_free_gb]
+        available_gpus = [g for g in gpus if g["free_mb"] / 1024 >= min_free_gb]
+        
+        if len(busy_gpus) > 0:
+            print(f"⚠️  Excluding {len(busy_gpus)} busy GPU(s) with <{min_free_gb:.0f} GB free:")
+            for g in busy_gpus:
+                print(f"   GPU {g['index']}: {g['free_mb']/1024:.1f} GB free ({g['name']})")
+            print()
+        
+        if len(available_gpus) == 0:
+            print(f"⚠️  Warning: No GPUs with ≥{min_free_gb:.0f} GB free available!", file=sys.stderr)
+            print(f"   Consider lowering --min-free-gb or freeing GPU memory", file=sys.stderr)
+            # Fall back to using all GPUs anyway
+            return gpus
+        
+        if len(available_gpus) < len(gpus):
+            print(f"✅ Using {len(available_gpus)} available GPU(s) with ≥{min_free_gb:.0f} GB free")
+            for g in available_gpus:
+                print(f"   GPU {g['index']}: {g['free_mb']/1024:.1f} GB free ({g['name']})")
+            print()
+        
+        return available_gpus
+    
+    return gpus
 
 def estimate_model_size(model_path: str) -> Tuple[float, float, bool]:
     """
@@ -220,6 +267,8 @@ def calculate_optimal_config(
     """
     Calculate optimal TP_SIZE and GPU_MEM_UTIL based on available resources.
     
+    Uses MINIMUM free memory across GPUs (not average) to ensure all GPUs can fit the model.
+    
     Args:
         gpus: List of GPU info dicts
         model_memory_gb: Estimated model memory requirement
@@ -237,9 +286,12 @@ def calculate_optimal_config(
         print("❌ Error: No GPUs available", file=sys.stderr)
         sys.exit(1)
     
-    # Calculate average free memory per GPU (in GB)
-    avg_free_gb = sum(g["free_mb"] for g in gpus) / num_gpus / 1024
+    # CRITICAL: Use MINIMUM free memory (not average) since TP requires all GPUs to fit
+    min_free_gb = min(g["free_mb"] for g in gpus) / 1024
+    max_total_gb = max(g["total_mb"] for g in gpus) / 1024
     avg_total_gb = sum(g["total_mb"] for g in gpus) / num_gpus / 1024
+    
+    print(f"   Memory constraints: {min_free_gb:.1f} GB min free, {avg_total_gb:.1f} GB avg total")
     
     # Minimum memory per GPU for model weights (with TP)
     kv_overhead_gb = 4  # Reserve 4GB per GPU for KV cache and overhead
@@ -249,7 +301,7 @@ def calculate_optimal_config(
         memory_per_gpu_needed = (model_memory_gb / tp_hint) + kv_overhead_gb
         required_util = memory_per_gpu_needed / avg_total_gb
         
-        if required_util <= max_util and memory_per_gpu_needed <= avg_free_gb * 0.90:
+        if required_util <= max_util and memory_per_gpu_needed <= min_free_gb * 0.90:
             print(f"   Using user-specified TP_SIZE={tp_hint}")
             return tp_hint, min(required_util, max_util)
         else:
@@ -265,8 +317,8 @@ def calculate_optimal_config(
         # Calculate what utilization this would require
         required_util = memory_per_gpu_needed / avg_total_gb
         
-        # Check if feasible with current free memory (with 10% safety margin)
-        available_with_margin = avg_free_gb * 0.90
+        # CRITICAL: Check against MINIMUM free memory (not average)
+        available_with_margin = min_free_gb * 0.90
         
         if memory_per_gpu_needed <= available_with_margin and required_util <= max_util:
             # This TP size works, calculate actual utilization
@@ -274,15 +326,18 @@ def calculate_optimal_config(
             
             best_tp = tp
             best_util = actual_util
+            print(f"   ✓ TP={tp}: needs {memory_per_gpu_needed:.1f} GB/GPU, using {actual_util:.0%} util")
             break
     else:
-        # Even TP=num_gpus doesn't fit, use all GPUs with max safe utilization
+        # Even TP=num_gpus doesn't fit with current GPU selection
+        # Calculate safest possible configuration
         best_tp = num_gpus
-        best_util = min(max_util, avg_free_gb * 0.90 / avg_total_gb)
+        best_util = min(max_util, min_free_gb * 0.90 / avg_total_gb)
         
         if best_util < min_util:
-            print("⚠️  Warning: Insufficient GPU memory. Model may not fit.", file=sys.stderr)
-            print(f"   Available: {avg_free_gb:.1f} GB free/GPU, Need: {model_memory_gb / best_tp:.1f} GB/GPU", file=sys.stderr)
+            print(f"⚠️  Warning: Even with TP={num_gpus}, memory is tight", file=sys.stderr)
+            print(f"   Min free: {min_free_gb:.1f} GB/GPU, Need: {model_memory_gb / num_gpus:.1f} GB/GPU", file=sys.stderr)
+            print(f"   Will use conservative {best_util:.0%} utilization", file=sys.stderr)
     
     return best_tp, best_util
 
@@ -327,6 +382,8 @@ def main():
     parser.add_argument("--max-util", type=float, default=0.90, help="Maximum GPU memory utilization (default: 0.90)")
     parser.add_argument("--min-util", type=float, default=0.50, help="Minimum GPU memory utilization (default: 0.50)")
     parser.add_argument("--tp-size", type=int, default=None, help="Force specific tensor parallelism")
+    parser.add_argument("--min-free-gb", type=float, default=10.0, help="Minimum free GPU memory in GB to consider GPU available (default: 10.0)")
+    parser.add_argument("--include-busy-gpus", action="store_true", help="Don't filter out busy GPUs (use all specified GPUs)")
     
     # Fallback control
     parser.add_argument("--no-fallback", action="store_true", help="Disable progressive fallback on OOM")
@@ -354,12 +411,23 @@ def main():
     gpu_ids = None
     if args.gpus:
         gpu_ids = [int(x.strip()) for x in args.gpus.split(",")]
-        all_gpus = filter_gpus(all_gpus, gpu_ids)
-        if len(all_gpus) == 0:
-            print(f"❌ Error: No GPUs found matching IDs: {gpu_ids}", file=sys.stderr)
-            sys.exit(1)
-        print(f"🎯 Using GPUs: {gpu_ids}")
-        print()
+    
+    all_gpus = filter_gpus(
+        all_gpus, 
+        gpu_ids, 
+        min_free_gb=args.min_free_gb,
+        include_busy=args.include_busy_gpus
+    )
+    
+    if len(all_gpus) == 0:
+        print(f"❌ Error: No GPUs available after filtering", file=sys.stderr)
+        sys.exit(1)
+    
+    if args.gpus:
+        print(f"🎯 User-specified GPUs: {args.gpus}")
+    else:
+        print(f"🎯 Auto-selected {len(all_gpus)} GPU(s)")
+    print()
     
     # Step 2: Analyze model
     model_path = args.model
