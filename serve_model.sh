@@ -32,6 +32,8 @@ GPU Constraints:
   --max-util FLOAT    Maximum GPU memory utilization (default: 0.90)
   --min-util FLOAT    Minimum GPU memory utilization (default: 0.50)
   --tp-size INT       Force specific tensor parallelism
+  --min-free-gb FLOAT Min free GPU memory to consider GPU available (default: 10.0)
+  --include-busy-gpus Don't filter out busy GPUs
 
 Fallback Control:
   --no-fallback       Disable progressive fallback on OOM
