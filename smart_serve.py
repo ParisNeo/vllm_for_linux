@@ -487,10 +487,15 @@ def main():
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
         print("🔒 Offline mode enabled (local model detected)")
     
-    # Set CUDA_VISIBLE_DEVICES
-    if args.gpus:
-        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
+    # Set CUDA_VISIBLE_DEVICES to restrict which GPUs vLLM sees
+    selected_gpu_ids = [g["index"] for g in all_gpus]
+    cuda_visible = ",".join(str(g) for g in selected_gpu_ids)
+    os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible
     
+    print()
+    print(f"🎯 GPU Selection:")
+    print(f"   Visible GPUs: {cuda_visible}")
+    print(f"   TP_SIZE: {tp_size} (will use all {len(all_gpus)} visible GPUs)")
     print()
     print("🚀 Launch command:")
     print("   " + " ".join(cmd))
@@ -508,7 +513,7 @@ def main():
         
         for attempt in range(fallback_steps + 1):
             print(f"🎯 Starting vLLM server (attempt {attempt + 1}/{fallback_steps + 1})...")
-            print(f"   GPU_MEM_UTIL={current_util:.2f}, TP_SIZE={tp_size}")
+            print(f"   GPU_MEM_UTIL={current_util:.2f}, TP_SIZE={tp_size}, CUDA_VISIBLE_DEVICES={cuda_visible}")
             print("=" * 60)
             
             # Build command with current util
