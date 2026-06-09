@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Smart Model Server - Intelligent vLLM Launcher
 # Automatically analyzes GPU resources and configures optimal settings
-# Supports configuration caching, multimodal models, and fallback mechanisms
+# Supports configuration caching, multimodal models, fallback mechanisms
+# Auto-generates runner scripts on successful startup
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -20,12 +21,14 @@ Options:
   --model PATH        Model directory or HuggingFace repo ID (required)
   --port PORT         Server port (default: 8000)
   --host HOST         Server host (default: 127.0.0.1)
+  --name NAME         Runner name (auto-generated if not provided)
   --max-model-len N   Maximum context length
   --dry-run           Show configuration without launching
 
 Configuration Control:
   --reset-config      Reset cached configuration and re-optimize
   --no-cache          Skip cache, always re-optimize
+  --no-auto-runner    Disable automatic runner generation
 
 GPU Constraints:
   --gpus IDS          Comma-separated GPU IDs (e.g., '0,1,2,3')
@@ -34,6 +37,10 @@ GPU Constraints:
   --tp-size INT       Force specific tensor parallelism
   --min-free-gb FLOAT Min free GPU memory to consider GPU available (default: 10.0)
   --include-busy-gpus Don't filter out busy GPUs
+
+Feature Control:
+  --no-multimodal     Disable multimodal features
+  --no-reasoning      Disable reasoning parser
 
 Fallback Control:
   --no-fallback       Disable progressive fallback on OOM
@@ -48,17 +55,23 @@ Environment Variables (for --manual mode):
   PORT, HOST, MAX_MODEL_LEN
 
 Examples:
-  # Auto-optimize for model
+  # Auto-optimize and create runner
   $0 --model models/google__gemma-4-31B-it/
   
+  # Custom port and host for multiple servers
+  $0 --model models/google__gemma-4-31B-it/ --port 8001 --host 0.0.0.0
+  
+  # Named runner
+  $0 --model models/llama-3.1-8b/ --name llama3_prod --port 8002
+  
   # Use specific GPUs only
-  $0 --model models/llama-3.1-8b/ --gpus 0,1
+  $0 --model models/llama-3.1-8b/ --gpus 4,5,6
   
   # Conservative memory usage
   $0 --model models/llama-3.1-8b/ --max-util 0.75
   
-  # Force TP=4, re-optimize
-  $0 --model models/llama-3.1-8b/ --tp-size 4 --reset-config
+  # Disable features
+  $0 --model models/vision-model/ --no-multimodal --no-reasoning
   
   # Dry run to see config
   $0 --model models/llama-3.1-8b/ --dry-run
@@ -76,6 +89,7 @@ fi
 MODEL_INPUT=""
 PORT="${PORT:-8000}"
 HOST="${HOST:-127.0.0.1}"
+NAME=""
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-}"
 DRY_RUN=""
 MANUAL_MODE=""
@@ -95,6 +109,10 @@ while [[ $# -gt 0 ]]; do
       HOST="$2"
       shift 2
       ;;
+    --name)
+      NAME="$2"
+      shift 2
+      ;;
     --max-model-len)
       MAX_MODEL_LEN="$2"
       shift 2
@@ -107,11 +125,11 @@ while [[ $# -gt 0 ]]; do
       MANUAL_MODE="1"
       shift
       ;;
-    --reset-config|--no-cache|--no-fallback)
+    --reset-config|--no-cache|--no-fallback|--no-multimodal|--no-reasoning|--no-auto-runner|--include-busy-gpus)
       SMART_ARGS+=("$1")
       shift
       ;;
-    --gpus|--max-util|--min-util|--tp-size|--fallback-steps)
+    --gpus|--max-util|--min-util|--tp-size|--min-free-gb|--fallback-steps)
       SMART_ARGS+=("$1" "$2")
       shift 2
       ;;
@@ -151,6 +169,10 @@ export CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}"
 if [[ -z "$MANUAL_MODE" && -f "${SCRIPT_DIR}/smart_serve.py" ]]; then
   # Smart mode: use Python analyzer
   CMD=(python "${SCRIPT_DIR}/smart_serve.py" --model "$MODEL_INPUT" --port "$PORT" --host "$HOST")
+  
+  if [[ -n "$NAME" ]]; then
+    CMD+=(--name "$NAME")
+  fi
   
   if [[ -n "$MAX_MODEL_LEN" ]]; then
     CMD+=(--max-model-len "$MAX_MODEL_LEN")
