@@ -16,7 +16,7 @@ DTYPE="${DTYPE:-bfloat16}"                 # Model dtype
 QUANTIZATION="${QUANTIZATION:-compressed-tensors}"
 
 # ===== SPECULATIVE DECODING (MTP) =====
-# DISABLED temporarily - causes issues with CUDA graph capture on some systems
+# DISABLED - causes issues with CUDA graph capture on some systems
 SPEC_METHOD="${SPEC_METHOD:-none}"
 SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}"
 
@@ -109,5 +109,4 @@ exec vllm serve "${MODEL_PATH}" \
   --enable-auto-tool-choice \
   --tool-call-parser glm47 \
   --reasoning-parser glm45 \
-  --disable-uvicorn-access-log \
-  --attention-backend FLASHINFER_MLA_SPARSE
+  --disable-uvicorn-access-log
