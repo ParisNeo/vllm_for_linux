@@ -8,25 +8,27 @@ DEFAULT_LOCAL_MODEL="models/QuantTrio__GLM-5.2-Int4-Int8Mix"
 # ===== CONFIGURABLE PARAMETERS =====
 MODEL_PATH="${1:-}"
 TP_SIZE="${TP_SIZE:-8}"                    # GLM-5.2 verified on TP=8
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"       # 0.90 as per model card
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"       # Slightly higher for more KV cache
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-auto}"     # auto or specific value
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"         # As per model card
+
+# ===== KV CACHE =====
 KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"    # FP8 KV cache
 DTYPE="${DTYPE:-bfloat16}"                 # Model dtype
 QUANTIZATION="${QUANTIZATION:-compressed-tensors}"
 
 # ===== SPECULATIVE DECODING (MTP) =====
-# DISABLED - causes issues with CUDA graph capture on some systems
-SPEC_METHOD="${SPEC_METHOD:-none}"
-SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}"
+# Re-enabled for performance — the model card specifies MTP with 1 token
+SPEC_METHOD="${SPEC_METHOD:-mtp}"
+SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-1}"
 
 # ===== CUDA DEVICE SELECTION =====
 CUDA_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 
-# ===== CUDA GRAPH SETTINGS =====
-# Disable CUDA graphs via environment variable (compatible with vLLM 0.22.x and 0.23.x)
-VLLM_DISABLE_CUDA_GRAPH="${VLLM_DISABLE_CUDA_GRAPH:-1}"
-VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-0}"
+# ===== PERFORMANCE TUNING =====
+# Enable CUDA graphs for faster decode (now that vLLM 0.23.0 works correctly)
+VLLM_DISABLE_CUDA_GRAPH="${VLLM_DISABLE_CUDA_GRAPH:-0}"
+VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}"
 
 # ===== ACTIVATE VIRTUAL ENVIRONMENT =====
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then
@@ -71,9 +73,24 @@ export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export VLLM_USE_V1="${VLLM_USE_V1:-1}"  # Enable vLLM v1 engine for GLM-5.2
 
+# ===== BUILD SPECULATIVE ARGS =====
+SPEC_ARGS=""
+if [[ "${SPEC_METHOD}" != "none" && "${SPEC_NUM_TOKENS}" -gt 0 ]]; then
+  SPEC_ARGS="--speculative-config method=${SPEC_METHOD} --speculative-config num_speculative_tokens=${SPEC_NUM_TOKENS}"
+  SPEC_DISPLAY="${SPEC_METHOD} (${SPEC_NUM_TOKENS} tokens)"
+else
+  SPEC_DISPLAY="disabled"
+fi
+
+# ===== BUILD CUDA GRAPH ARGS =====
+CUDA_GRAPH_STATUS="ENABLED"
+if [[ "${VLLM_DISABLE_CUDA_GRAPH}" == "1" ]]; then
+  CUDA_GRAPH_STATUS="DISABLED"
+fi
+
 # ===== PRINT CONFIGURATION =====
 echo "============================================================"
-echo " GLM-5.2 vLLM Launcher"
+echo " GLM-5.2 vLLM Launcher (Optimized)"
 echo " Optimized for 8x H200 (verified configuration)"
 echo "============================================================"
 echo " Model:           ${MODEL_PATH}"
@@ -85,7 +102,10 @@ echo " Max Num Seqs:    ${MAX_NUM_SEQS}"
 echo " KV Cache Dtype:  ${KV_CACHE_DTYPE}"
 echo " Model Dtype:     ${DTYPE}"
 echo " Quantization:    ${QUANTIZATION}"
-echo " Speculative:     ${SPEC_METHOD} (${SPEC_NUM_TOKENS} tokens)"
+echo " Speculative:     ${SPEC_DISPLAY}"
+echo " CUDA Graphs:     ${CUDA_GRAPH_STATUS}"
+echo " Prefix Caching:  ENABLED"
+echo " Generation Config: vllm (prevents temp=1.0 override)"
 echo " CUDA Devices:    ${CUDA_VISIBLE_DEVICES}"
 echo "============================================================"
 
@@ -109,4 +129,7 @@ exec vllm serve "${MODEL_PATH}" \
   --enable-auto-tool-choice \
   --tool-call-parser glm47 \
   --reasoning-parser glm45 \
+  --generation-config vllm \
+  --enable-prefix-caching \
+  ${SPEC_ARGS} \
   --disable-uvicorn-access-log
