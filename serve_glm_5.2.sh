@@ -76,8 +76,8 @@ export VLLM_USE_V1="${VLLM_USE_V1:-1}"  # Enable vLLM v1 engine for GLM-5.2
 # ===== BUILD SPECULATIVE ARGS =====
 SPEC_ARGS=""
 if [[ "${SPEC_METHOD}" != "none" && "${SPEC_NUM_TOKENS}" -gt 0 ]]; then
-  SPEC_ARGS="--speculative-config method=${SPEC_METHOD} num_speculative_tokens=${SPEC_NUM_TOKENS}"
-  SPEC_DISPLAY="${SPEC_METHOD} (${SPEC_NUM_TOKENS} tokens)"
+  SPEC_ARGS=""#"--speculative-config method=${SPEC_METHOD} num_speculative_tokens=${SPEC_NUM_TOKENS}"
+  SPEC_DISPLAY=""#"${SPEC_METHOD} (${SPEC_NUM_TOKENS} tokens)"
 else
   SPEC_DISPLAY="disabled"
 fi
