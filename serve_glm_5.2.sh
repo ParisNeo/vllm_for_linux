@@ -24,7 +24,8 @@ SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}"
 CUDA_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 
 # ===== CUDA GRAPH SETTINGS =====
-# Disable piecewise CUDA graphs to avoid all-reduce errors
+# Disable CUDA graphs via environment variable (compatible with vLLM 0.22.x and 0.23.x)
+VLLM_DISABLE_CUDA_GRAPH="${VLLM_DISABLE_CUDA_GRAPH:-1}"
 VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-0}"
 
 # ===== ACTIVATE VIRTUAL ENVIRONMENT =====
@@ -109,5 +110,4 @@ exec vllm serve "${MODEL_PATH}" \
   --tool-call-parser glm47 \
   --reasoning-parser glm45 \
   --disable-uvicorn-access-log \
-  --disable-cuda-graph \
   --attention-backend FLASHINFER_MLA_SPARSE
