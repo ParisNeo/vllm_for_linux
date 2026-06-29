@@ -16,11 +16,16 @@ DTYPE="${DTYPE:-bfloat16}"                 # Model dtype
 QUANTIZATION="${QUANTIZATION:-compressed-tensors}"
 
 # ===== SPECULATIVE DECODING (MTP) =====
-SPEC_METHOD="${SPEC_METHOD:-mtp}"
-SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-1}"
+# DISABLED temporarily - causes issues with CUDA graph capture on some systems
+SPEC_METHOD="${SPEC_METHOD:-none}"
+SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}"
 
 # ===== CUDA DEVICE SELECTION =====
 CUDA_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
+
+# ===== CUDA GRAPH SETTINGS =====
+# Disable piecewise CUDA graphs to avoid all-reduce errors
+VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-0}"
 
 # ===== ACTIVATE VIRTUAL ENVIRONMENT =====
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then
@@ -103,6 +108,6 @@ exec vllm serve "${MODEL_PATH}" \
   --enable-auto-tool-choice \
   --tool-call-parser glm47 \
   --reasoning-parser glm45 \
-  --speculative-config.method "${SPEC_METHOD}" \
-  --speculative-config.num_speculative_tokens "${SPEC_NUM_TOKENS}" \
-  --disable-uvicorn-access-log
+  --disable-uvicorn-access-log \
+  --disable-cuda-graph \
+  --attention-backend FLASHINFER_MLA_SPARSE
