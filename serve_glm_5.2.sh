@@ -110,5 +110,4 @@ exec vllm serve "${MODEL_PATH}" \
   --tool-call-parser glm47 \
   --reasoning-parser glm45 \
   --disable-uvicorn-access-log \
-  --disable-cuda-graph \
   --attention-backend FLASHINFER_MLA_SPARSE
