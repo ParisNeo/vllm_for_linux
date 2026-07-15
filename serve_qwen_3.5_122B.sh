@@ -7,7 +7,7 @@ DEFAULT_LOCAL_MODEL="models/Qwen__Qwen3.5-122B-A10B-GPTQ-Int4"
 
 MODEL_PATH="${1:-}"
 TP_SIZE="${TP_SIZE:-4}"
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.60}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.56}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-128000}"
 # Mamba architecture requires 1 cache block per sequence
 # At 60% GPU utilization: ~161 blocks available, using 128 for safety margin
