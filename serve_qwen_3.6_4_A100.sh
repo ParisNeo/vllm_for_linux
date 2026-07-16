@@ -106,7 +106,7 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 echo "============================================================"
-echo " Qwen3.6 text-only vLLM launcher"
+echo " Qwen3.6 vLLM launcher (text + vision)"
 echo " Optimized for 4x A100 40GB"
 echo " Default max_model_len: ${MAX_MODEL_LEN}"
 echo " Model: ${MODEL_PATH}"
@@ -123,6 +123,5 @@ exec vllm serve "${MODEL_PATH}" \
   --gpu-memory-utilization "${GPU_MEM_UTIL}" \
   --reasoning-parser qwen3 \
   --default-chat-template-kwargs '{"enable_thinking": false}' \
-  --language-model-only \
   --enable-prefix-caching \
   --disable-custom-all-reduce
