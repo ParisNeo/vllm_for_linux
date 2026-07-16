@@ -121,7 +121,8 @@ exec vllm serve "${MODEL_PATH}" \
   --tensor-parallel-size "${TP_SIZE}" \
   --max-model-len "${MAX_MODEL_LEN}" \
   --gpu-memory-utilization "${GPU_MEM_UTIL}" \
-  --chat-template-kwargs '{"enable_thinking":false}' \
+  --reasoning-parser qwen3 \
+  --default-chat-template-kwargs '{"enable_thinking": false}' \
   --language-model-only \
   --enable-prefix-caching \
   --disable-custom-all-reduce
