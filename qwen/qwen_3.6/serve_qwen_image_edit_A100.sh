@@ -78,6 +78,6 @@ exec vllm serve "${MODEL_PATH}" \
   --tensor-parallel-size 1 \
   --max-model-len 4096 \
   --gpu-memory-utilization 0.85 \
-  --quantization fp4 \
+  --dtype bfloat16 \
   --omni \
   --diffusion-load-format diffusers
