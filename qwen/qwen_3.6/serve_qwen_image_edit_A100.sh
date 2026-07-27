@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${ROOT_DIR}/../../venv"
 
 SERVE_HOST="${HOST:-127.0.0.1}"
@@ -10,7 +10,7 @@ DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen-Image-Edit-2511"
 
 usage() {
   cat <<EOF
-Usage: $(basename "${BASH_SOURCE}") [MODEL_PATH] [OPTIONS]
+Usage: $(basename "${BASH_SOURCE[0]}") [MODEL_PATH] [OPTIONS]
 Tested Architecture: A100 (40GB) - Isolates on 1 single GPU
 
 Options:
@@ -43,13 +43,13 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-export CUDA_VISIBLE_DEVICES="3"
+export CUDA_VISIBLE_DEVICES="0"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 
 echo "============================================================"
 echo " ▶️ vLLM Launcher: Qwen Image Editing"
-echo " Target Arch: 1x A100 40GB (Isolating on GPU 3)"
+echo " Target Arch: 1x A100 40GB (Isolating on GPU 0 alongside Qwen 3.6)"
 echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
@@ -59,4 +59,4 @@ exec vllm serve "${MODEL_PATH}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 1 \
   --max-model-len 8192 \
-  --gpu-memory-utilization 0.95 
+  --gpu-memory-utilization 0.20
