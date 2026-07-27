@@ -45,8 +45,9 @@ fi
 
 export CUDA_VISIBLE_DEVICES="0,1,2"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
-export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+export FLASHINFER_DISABLE_VERSION_CHECK=1
+export VLLM_RPC_TIMEOUT=600
 
 echo "============================================================"
 echo " ▶️ vLLM Launcher: Qwen 3.6 Text + Vision Native"
@@ -66,5 +67,6 @@ exec vllm serve "${MODEL_PATH}" \
   --reasoning-parser qwen3 \
   --default-chat-template-kwargs '{"enable_thinking": false}' \
   --enable-prefix-caching \
-  --mm-encoder-tp-mode data \
-  --limit-mm-per-prompt '{"image": 4}'
+ --mm-encoder-tp-mode data \
+ --limit-mm-per-prompt '{"image": 4}' \
+ --rpc-timeout-seconds 600
