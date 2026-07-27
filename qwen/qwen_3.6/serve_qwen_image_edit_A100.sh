@@ -59,4 +59,6 @@ exec vllm serve "${MODEL_PATH}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 1 \
   --max-model-len 8192 \
-  --gpu-memory-utilization 0.20
+  --gpu-memory-utilization 0.20 \
+   --omni \
+   --diffusion-load-format diffusers
