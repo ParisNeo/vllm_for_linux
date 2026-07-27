@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
-VENV_DIR="${ROOT_DIR}/../../../venv" # Remonte à la racine depuis qwen/qwen_3.6/
+VENV_DIR="${ROOT_DIR}/../../venv" # Remonte à la racine depuis qwen/qwen_3.6/
 
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8000}"
