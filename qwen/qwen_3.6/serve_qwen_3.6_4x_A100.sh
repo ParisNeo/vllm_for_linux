@@ -56,6 +56,25 @@ echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
 
+echo "[PRE-FLIGHT] Checking GPU memory availability on physical GPUs 0,1..."
+GPU_MEM_FREE_0=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i 0 | tr -d '[:space:]')
+GPU_MEM_FREE_1=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i 1 | tr -d '[:space:]')
+
+if [[ -z "${GPU_MEM_FREE_0}" || -z "${GPU_MEM_FREE_1}" ]]; then
+  echo "[PRE-FLIGHT][WARN] Could not query free memory for GPUs 0,1. Proceeding anyway."
+elif [[ "${GPU_MEM_FREE_0}" -lt 15360 || "${GPU_MEM_FREE_1}" -lt 15360 ]]; then
+  echo "[PRE-FLIGHT][ERROR] Insufficient free memory on target GPUs."
+  echo "                 GPU 0: ${GPU_MEM_FREE_0}MiB free / GPU 1: ${GPU_MEM_FREE_1}MiB free"
+  echo "                 At least 15360MiB is required per GPU. A previous process may be hanging."
+  echo "                 Run 'nvidia-smi' to identify and kill stale vLLM processes."
+  exit 1
+else
+  echo "[PRE-FLIGHT][OK] GPU 0: ${GPU_MEM_FREE_0}MiB free | GPU 1: ${GPU_MEM_FREE_1}MiB free"
+fi
+
+echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache to prevent fragmentation locks..."
+python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
+
 exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
