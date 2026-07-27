@@ -613,8 +613,8 @@ fi
 if [ "$USE_UV" -eq 1 ]; then
   print_info "Installing required Python packages with uv..."
   
-  uv pip install -U \
-    "vllm==0.25.0" \
+ uv pip install -U \
+   "vllm==0.26.0" \
     huggingface_hub \
     ascii-colors \
     --torch-backend=auto
@@ -623,8 +623,8 @@ if [ "$USE_UV" -eq 1 ]; then
 else
   print_info "Installing required Python packages with pip..."
   python -m pip install --upgrade pip
-  python -m pip install -U \
-    "vllm==0.25.0" \
+ python -m pip install -U \
+   "vllm==0.26.0" \
     huggingface_hub \
     ascii-colors
   python -m pip install -U git+https://github.com/vllm-project/vllm-omni.git
