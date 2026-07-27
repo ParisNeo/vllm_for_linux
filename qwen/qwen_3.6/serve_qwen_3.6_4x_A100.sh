@@ -11,7 +11,7 @@ DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.6-27B"
 usage() {
   cat <<EOF
 Usage: $(basename "${BASH_SOURCE[0]}") [MODEL_PATH] [OPTIONS]
-Tested Architecture: 3x A100 (40GB) - Frees GPU 3 for Image Editing
+Tested Architecture: 2x A100 (40GB) - Frees GPUs 2 and 3 for Image Editing
 
 Options:
   --host HOST       Host/interface (default: ${SERVE_HOST})
@@ -43,7 +43,7 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-export CUDA_VISIBLE_DEVICES="0,1,2"
+export CUDA_VISIBLE_DEVICES="0,1"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK=1
@@ -51,7 +51,7 @@ export VLLM_RPC_TIMEOUT=600
 
 echo "============================================================"
 echo " ▶️ vLLM Launcher: Qwen 3.6 Text + Vision Native"
-echo " Target Arch: 3x A100 40GB (Tensor Parallel on GPUs 0,1,2)"
+echo " Target Arch: 2x A100 40GB (Tensor Parallel on GPUs 0,1)"
 echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
@@ -59,7 +59,7 @@ echo "============================================================"
 exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
-  --tensor-parallel-size 3 \
+  --tensor-parallel-size 2 \
   --disable-custom-all-reduce \
   --max-model-len 32768 \
   --gpu-memory-utilization 0.90 \
