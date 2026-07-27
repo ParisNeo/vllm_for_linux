@@ -59,6 +59,7 @@ exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 4 \
+  --disable-custom-all-reduce \
   --max-model-len 32768 \
   --gpu-memory-utilization 0.70 \
   --trust-remote-code \
