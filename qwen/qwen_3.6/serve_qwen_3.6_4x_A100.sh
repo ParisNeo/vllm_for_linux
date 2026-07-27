@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
-VENV_DIR="${ROOT_DIR}/../../venv" # Remonte à la racine depuis qwen/qwen_3.6/
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="${ROOT_DIR}/../../venv"
 
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8000}"
@@ -10,8 +10,8 @@ DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.6-27B"
 
 usage() {
   cat <<EOF
-Usage: $(basename "${BASH_SOURCE}") [MODEL_PATH] [OPTIONS]
-Tested Architecture: 4x A100 (40GB) - Uses 3 GPUs
+Usage: $(basename "${BASH_SOURCE[0]}") [MODEL_PATH] [OPTIONS]
+Tested Architecture: 4x A100 (40GB) - Uses 4 GPUs
 
 Options:
   --host HOST       Host/interface (default: ${SERVE_HOST})
@@ -43,14 +43,14 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-export CUDA_VISIBLE_DEVICES="0,1,2"
+export CUDA_VISIBLE_DEVICES="0,1,2,3"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 
 echo "============================================================"
 echo " ▶️ vLLM Launcher: Qwen 3.6 Text + Vision Native"
-echo " Target Arch: 4x A100 40GB (Isolating on GPUs 0,1,2)"
+echo " Target Arch: 4x A100 40GB (Tensor Parallel on all 4 GPUs)"
 echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
@@ -58,9 +58,9 @@ echo "============================================================"
 exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
-  --tensor-parallel-size 3 \
+  --tensor-parallel-size 4 \
   --max-model-len 32768 \
-  --gpu-memory-utilization 0.90 \
+  --gpu-memory-utilization 0.70 \
   --trust-remote-code \
   --reasoning-parser qwen3 \
   --default-chat-template-kwargs '{"enable_thinking": false}' \
