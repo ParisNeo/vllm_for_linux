@@ -75,6 +75,5 @@ exec vllm serve "${MODEL_PATH}" \
   --tensor-parallel-size 1 \
   --max-model-len 8192 \
   --gpu-memory-utilization 0.80 \
-  --enforce-eager \
   --omni \
   --diffusion-load-format diffusers
