@@ -56,24 +56,28 @@ echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
 
-echo "[PRE-FLIGHT] Checking GPU memory availability..."
+echo "[PRE-FLIGHT] Checking GPU memory availability on physical GPU 3..."
 GPU_MEM_FREE=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i 3 | tr -d '[:space:]')
 if [[ -z "${GPU_MEM_FREE}" ]]; then
   echo "[PRE-FLIGHT][WARN] Could not query free memory for GPU 3. Proceeding anyway."
-elif [[ "${GPU_MEM_FREE}" -lt 10240 ]]; then
+elif [[ "${GPU_MEM_FREE}" -lt 15360 ]]; then
   echo "[PRE-FLIGHT][ERROR] GPU 3 has only ${GPU_MEM_FREE}MiB free."
-  echo "                 At least 10240MiB is required. It is likely occupied by another process."
+  echo "                 At least 15360MiB is required for safe diffusion pipeline initialization."
   echo "                 Run 'nvidia-smi' to identify the process and kill it before retrying."
   exit 1
 else
   echo "[PRE-FLIGHT][OK] GPU 3 has ${GPU_MEM_FREE}MiB free."
 fi
 
+echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache to prevent fragmentation locks..."
+python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
+
 exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 1 \
-  --max-model-len 8192 \
-  --gpu-memory-utilization 0.80 \
+  --max-model-len 4096 \
+  --gpu-memory-utilization 0.85 \
+  --dtype half \
   --omni \
   --diffusion-load-format diffusers
