@@ -62,10 +62,9 @@ exec vllm serve "${MODEL_PATH}" \
   --tensor-parallel-size 2 \
   --disable-custom-all-reduce \
   --max-model-len 32768 \
-  --gpu-memory-utilization 0.90 \
+  --gpu-memory-utilization 0.82 \
   --trust-remote-code \
   --reasoning-parser qwen3 \
   --default-chat-template-kwargs '{"enable_thinking": false}' \
   --enable-prefix-caching \
- --mm-encoder-tp-mode data \
- --limit-mm-per-prompt '{"image": 4}'
+  --limit-mm-per-prompt '{"image": 4}'
