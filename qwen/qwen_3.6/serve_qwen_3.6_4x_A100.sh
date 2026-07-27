@@ -68,5 +68,4 @@ exec vllm serve "${MODEL_PATH}" \
   --default-chat-template-kwargs '{"enable_thinking": false}' \
   --enable-prefix-caching \
  --mm-encoder-tp-mode data \
- --limit-mm-per-prompt '{"image": 4}' \
- --rpc-timeout-seconds 600
+ --limit-mm-per-prompt '{"image": 4}'
