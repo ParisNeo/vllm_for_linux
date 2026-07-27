@@ -30,7 +30,7 @@ def find_hf_token():
 def print_header(model: str, target: Path):
     ASCIIColors.cyan("=" * 80)
     ASCIIColors.cyan(" Hugging Face model snapshot downloader")
-    ASCIIColors.magenta(" By ParisNeo")
+    ASCIIColors.magenta(" By ParisNeo & Optimized for vLLM Cluster")
     ASCIIColors.cyan("=" * 80)
     ASCIIColors.white(f"Model  : {model}")
     ASCIIColors.white(f"Target : {target}")
@@ -51,10 +51,7 @@ def print_header(model: str, target: Path):
         ASCIIColors.white("2. Create a new token with read access.")
         ASCIIColors.white("3. Export it in your shell:")
         ASCIIColors.white('   export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxx"')
-        ASCIIColors.white("4. Or login once with:")
-        ASCIIColors.white("   hf auth login")
         ASCIIColors.white("")
-        ASCIIColors.yellow("Tip: HF_TOKEN overrides the cached login token.")
 
     ASCIIColors.white("")
 
@@ -63,11 +60,19 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Download a Hugging Face repo snapshot into a local directory."
     )
+    # Rendu positionnel optionnel pour correspondre à votre syntaxe d'appel fluide
+    parser.add_argument(
+        "positional_model",
+        type=str,
+        nargs="?",
+        default=None,
+        help="Hugging Face repo id passed directly (e.g. Qwen/Qwen3.6-27B)",
+    )
     parser.add_argument(
         "--model",
         type=str,
-        default="mistralai/Mistral-7B-Instruct-v0.2",
-        help="Hugging Face repo id, e.g. mistralai/Mistral-7B-Instruct-v0.2",
+        default=None,
+        help="Alternative way to provide Hugging Face repo id",
     )
     parser.add_argument(
         "--dir",
@@ -111,25 +116,35 @@ def parse_args():
 def main():
     args = parse_args()
 
+    # Détermination du modèle (priorité à l'argument positionnel s'il existe)
+    model_id = args.positional_model or args.model or "mistralai/Mistral-7B-Instruct-v0.2"
+
     base_dir = Path(args.dir).expanduser().resolve()
-    target = base_dir / sanitize_repo_id(args.model)
+    target = base_dir / sanitize_repo_id(model_id)
     target.mkdir(parents=True, exist_ok=True)
 
-    print_header(args.model, target)
+    print_header(model_id, target)
 
     _, token = find_hf_token()
+
+    # Optimisation automatique des patterns d'exclusion pour éviter les doublons de poids lourds
+    # On évite d'importer les vieux formats .bin ou .pt si des .safetensors (natifs vLLM) sont présents
+    ignore_patterns = args.ignore_pattern or []
+    if not args.allow_pattern:
+        # Exclut les formats obsolètes / non-optimisés vLLM pour économiser de l'espace disque
+        ignore_patterns.extend(["*.pth", "*.pt", "*.bin"]) 
 
     try:
         if args.dry_run:
             ASCIIColors.blue("Dry run enabled. Querying remote snapshot without downloading...")
             dry_info = snapshot_download(
-                repo_id=args.model,
+                repo_id=model_id,
                 repo_type=args.repo_type,
                 revision=args.revision,
                 local_dir=str(target),
                 local_dir_use_symlinks=False,
                 allow_patterns=args.allow_pattern,
-                ignore_patterns=args.ignore_pattern,
+                ignore_patterns=ignore_patterns,
                 token=token,
                 dry_run=True,
             )
@@ -139,15 +154,16 @@ def main():
 
         ASCIIColors.blue("Starting snapshot download...")
         snapshot_path = snapshot_download(
-            repo_id=args.model,
+            repo_id=model_id,
             repo_type=args.repo_type,
             revision=args.revision,
             local_dir=str(target),
             local_dir_use_symlinks=False,
             allow_patterns=args.allow_pattern,
-            ignore_patterns=args.ignore_pattern,
+            ignore_patterns=ignore_patterns,
             token=token,
             resume_download=True,
+            max_workers=8, # Accélère le téléchargement parallèle sur vos liaisons serveurs rapides
         )
 
         ASCIIColors.green("")
@@ -165,7 +181,6 @@ def main():
         ASCIIColors.white("- Check that the repo id is correct.")
         ASCIIColors.white("- If the model is gated/private, ensure your HF token has access.")
         ASCIIColors.white("- Accept the model license on Hugging Face if required.")
-        ASCIIColors.white("- Try setting HF_TOKEN or running: hf auth login")
         sys.exit(1)
 
 
