@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="${ROOT_DIR}/../venv" # Ajustez le chemin vers votre venv s'il est à la racine
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
+VENV_DIR="${ROOT_DIR}/../../../../venv" # Remonte à la racine depuis qwen/qwen_3.6/
 
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8000}"
 MODEL_PATH=""
-DEFAULT_MODEL="models/Qwen__Qwen3.6-27B"
+DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.6-27B"
 
 usage() {
   cat <<EOF
-Usage: $(basename "${BASH_SOURCE[0]}") [MODEL_PATH] [OPTIONS]
+Usage: $(basename "${BASH_SOURCE}") [MODEL_PATH] [OPTIONS]
 Tested Architecture: 4x A100 (40GB) - Uses 3 GPUs
 
 Options:
@@ -43,7 +43,6 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-# Isolation matérielle (GPU 0, 1, 2)
 export CUDA_VISIBLE_DEVICES="0,1,2"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
