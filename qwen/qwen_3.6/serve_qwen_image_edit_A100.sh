@@ -43,13 +43,13 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-export CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES="3"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 
 echo "============================================================"
 echo " ▶️ vLLM Launcher: Qwen Image Editing"
-echo " Target Arch: 1x A100 40GB (Isolating on GPU 0 alongside Qwen 3.6)"
+echo " Target Arch: 1x A100 40GB (Isolating on GPU 3 alongside Qwen 3.6 TP)"
 echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
@@ -59,6 +59,6 @@ exec vllm serve "${MODEL_PATH}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 1 \
   --max-model-len 8192 \
-  --gpu-memory-utilization 0.20 \
-   --omni \
-   --diffusion-load-format diffusers
+  --gpu-memory-utilization 0.85 \
+  --omni \
+  --diffusion-load-format diffusers
