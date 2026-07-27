@@ -81,6 +81,7 @@ exec vllm serve "${MODEL_PATH}" \
   --tensor-parallel-size 2 \
   --disable-custom-all-reduce \
   --max-model-len 32768 \
+  --max-num-seqs 96 \
   --gpu-memory-utilization 0.82 \
   --trust-remote-code \
   --reasoning-parser qwen3 \
