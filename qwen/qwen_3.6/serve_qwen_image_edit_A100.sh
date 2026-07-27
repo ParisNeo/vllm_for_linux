@@ -44,8 +44,10 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
 fi
 
 export CUDA_VISIBLE_DEVICES="3"
-export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+export FLASHINFER_DISABLE_VERSION_CHECK=1
+export VLLM_RPC_TIMEOUT=600
 
 echo "============================================================"
 echo " ▶️ vLLM Launcher: Qwen Image Editing"
@@ -72,6 +74,7 @@ exec vllm serve "${MODEL_PATH}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 1 \
   --max-model-len 8192 \
-  --gpu-memory-utilization 0.85 \
+  --gpu-memory-utilization 0.80 \
+  --enforce-eager \
   --omni \
   --diffusion-load-format diffusers
