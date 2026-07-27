@@ -104,7 +104,6 @@ setup_with_uv() {
   print_info "Using uv-managed Python ${TARGET_PYTHON}..."
   uv python install "${TARGET_PYTHON}"
   uv venv --python "${TARGET_PYTHON}" --seed venv
-  # shellcheck disable=SC1091
   source "$ACTIVATE_PATH"
   PYTHON_BIN="$(command -v python)"
 }
@@ -115,7 +114,6 @@ setup_with_system_python() {
 
   print_info "Using system Python: $("$py" --version 2>&1)"
   "$py" -m venv venv
-  # shellcheck disable=SC1091
   source "$ACTIVATE_PATH"
   PYTHON_BIN="$(command -v python)"
 }
@@ -617,6 +615,7 @@ if [ "$USE_UV" -eq 1 ]; then
    "vllm==0.26.0" \
     huggingface_hub \
     ascii-colors \
+    torchao \
     --torch-backend=auto
 
   uv pip install -U git+https://github.com/vllm-project/vllm-omni.git
@@ -626,7 +625,8 @@ else
  python -m pip install -U \
    "vllm==0.26.0" \
     huggingface_hub \
-    ascii-colors
+    ascii-colors \
+    torchao
   python -m pip install -U git+https://github.com/vllm-project/vllm-omni.git
 fi
 
