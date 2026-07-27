@@ -616,6 +616,7 @@ if [ "$USE_UV" -eq 1 ]; then
     vllm \
     huggingface_hub \
     ascii-colors
+ uv pip install -U git+https://github.com/vllm-project/vllm-omni.git
 else
   print_info "Installing required Python packages with pip..."
   python -m pip install --upgrade pip
@@ -623,6 +624,7 @@ else
     vllm \
     huggingface_hub \
     ascii-colors
+  python -m pip install -U git+https://github.com/vllm-project/vllm-omni.git
 fi
 
 write_test_cuda
