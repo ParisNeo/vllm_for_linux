@@ -80,5 +80,6 @@ exec vllm serve "${MODEL_PATH}" \
   --gpu-memory-utilization 0.85 \
   --omni \
   --diffusion-load-format diffusers \
+  --diffusion-load-kwargs '{"dtype": "bfloat16"}' \
   --vae-use-slicing \
   --vae-use-tiling
