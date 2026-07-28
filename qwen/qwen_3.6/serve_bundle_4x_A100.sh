@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
 
-MODEL_TEXT_VISION="${ROOT_DIR}/models/Qwen__Qwen3.6-27B-FP8/"
+MODEL_TEXT_VISION="${ROOT_DIR}/models/QuantTrio__Qwen3.6-27B-AWQ/"
 MODEL_IMAGE_EDIT="${ROOT_DIR}/models/Qwen__Qwen-Image-Edit-2511/"
 
 echo "============================================================"
