@@ -85,7 +85,6 @@ exec vllm serve "${MODEL_PATH}" \
   --kv-cache-dtype fp8 \
   --enable-chunked-prefill \
   --max-num-batched-tokens 4096 \
-  --async-output-proc \
   --enable-prefix-caching \
   --trust-remote-code \
   --reasoning-parser qwen3 \
