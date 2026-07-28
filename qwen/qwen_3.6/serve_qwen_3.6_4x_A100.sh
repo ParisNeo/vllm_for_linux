@@ -82,7 +82,7 @@ exec vllm serve "${MODEL_PATH}" \
   --disable-custom-all-reduce \
   --max-model-len 32768 \
   --max-num-seqs 256 \
-  --gpu-memory-utilization 0.90 \
+  --gpu-memory-utilization 0.85 \
   --kv-cache-dtype fp8_e4m3 \
   --enable-chunked-prefill \
   --max-num-batched-tokens 4096 \
