@@ -79,11 +79,10 @@ exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 2 \
-  --quantization awq \
   --disable-custom-all-reduce \
-  --max-model-len 32768 \
-  --max-num-seqs 256 \
-  --gpu-memory-utilization 0.90 \
+  --max-model-len 262144 \
+  --max-num-seqs 128 \
+  --gpu-memory-utilization 0.92 \
   --kv-cache-dtype auto \
   --enable-prefix-caching \
   --trust-remote-code \
