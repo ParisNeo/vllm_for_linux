@@ -79,14 +79,14 @@ exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 2 \
+  --quantization awq \
   --disable-custom-all-reduce \
-  --enforce-eager \
   --max-model-len 32768 \
   --max-num-seqs 256 \
-  --gpu-memory-utilization 0.92 \
+  --gpu-memory-utilization 0.90 \
   --kv-cache-dtype auto \
   --enable-prefix-caching \
   --trust-remote-code \
   --reasoning-parser qwen3 \
   --default-chat-template-kwargs '{"enable_thinking": false}' \
-  --limit-mm-per-prompt '{"image": 4}'
+  --limit-mm-per-prompt '{"image": 4}''
