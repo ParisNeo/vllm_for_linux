@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="${ROOT_DIR}/../../../venv" # Remonte à la racine depuis qwen/qwen_3.6/
+VENV_DIR="${ROOT_DIR}/../../venv" # Remonte à la racine depuis qwen/qwen_3.6/
 
 # Vérification et activation du environnement virtuel global
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then
