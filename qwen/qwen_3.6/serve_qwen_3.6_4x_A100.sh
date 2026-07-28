@@ -89,4 +89,4 @@ exec vllm serve "${MODEL_PATH}" \
   --trust-remote-code \
   --reasoning-parser qwen3 \
   --default-chat-template-kwargs '{"enable_thinking": false}' \
-  --limit-mm-per-prompt '{"image": 4}''
+  --limit-mm-per-prompt '{"image": 4}'
