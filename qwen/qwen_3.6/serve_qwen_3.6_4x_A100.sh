@@ -6,7 +6,7 @@ VENV_DIR="${ROOT_DIR}/../../venv"
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8000}"
 MODEL_PATH=""
-DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.6-27B-FP8"
+DEFAULT_MODEL="${ROOT_DIR}/models/QuantTrio__Qwen3.6-27B-AWQ"
 
 usage() {
   cat <<EOF
