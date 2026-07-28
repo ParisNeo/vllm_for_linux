@@ -83,7 +83,7 @@ exec vllm serve "${MODEL_PATH}" \
   --max-model-len 32768 \
   --max-num-seqs 256 \
   --gpu-memory-utilization 0.90 \
-  --kv-cache-dtype fp8_e4m3 \
+  --kv-cache-dtype auto \
   --enable-chunked-prefill \
   --max-num-batched-tokens 4096 \
   --enable-prefix-caching \
