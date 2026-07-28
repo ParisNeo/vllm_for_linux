@@ -80,12 +80,11 @@ exec vllm serve "${MODEL_PATH}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 2 \
   --disable-custom-all-reduce \
+  --enforce-eager \
   --max-model-len 32768 \
   --max-num-seqs 256 \
-  --gpu-memory-utilization 0.90 \
+  --gpu-memory-utilization 0.92 \
   --kv-cache-dtype auto \
-  --enable-chunked-prefill \
-  --max-num-batched-tokens 4096 \
   --enable-prefix-caching \
   --trust-remote-code \
   --reasoning-parser qwen3 \
