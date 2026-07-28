@@ -6,7 +6,7 @@ VENV_DIR="${ROOT_DIR}/../../venv"
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8000}"
 MODEL_PATH=""
-DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.6-27B"
+DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.6-27B-FP8"
 
 usage() {
   cat <<EOF
@@ -82,7 +82,7 @@ exec vllm serve "${MODEL_PATH}" \
   --disable-custom-all-reduce \
   --max-model-len 32768 \
   --max-num-seqs 256 \
-  --gpu-memory-utilization 0.85 \
+  --gpu-memory-utilization 0.90 \
   --kv-cache-dtype fp8_e4m3 \
   --enable-chunked-prefill \
   --max-num-batched-tokens 4096 \
