@@ -82,4 +82,4 @@ exec vllm serve "${MODEL_PATH}" \
   --diffusion-load-format diffusers \
   --vae-use-slicing \
   --vae-use-tiling \
-  --enable-layerwise-offload
+  --enable-cpu-offload
