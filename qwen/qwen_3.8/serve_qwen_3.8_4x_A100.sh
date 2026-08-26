@@ -6,7 +6,7 @@ VENV_DIR="${ROOT_DIR}/../../venv"
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8000}"
 MODEL_PATH=""
-DEFAULT_MODEL="${ROOT_DIR}/models/amd__Qwen3.8-27B-Quark-AWQ-INT4-W4A16"
+DEFAULT_MODEL="${ROOT_DIR}/models/cyankiwi__Qwen3.8-27B-AWQ-INT4"
 
 usage() {
   cat <<EOF

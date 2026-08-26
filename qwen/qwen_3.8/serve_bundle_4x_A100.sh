@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# amd/Qwen3.8-27B-Quark-AWQ-INT4-W4A16
-MODEL_TEXT_VISION="${ROOT_DIR}/models/amd__Qwen3.8-27B-Quark-AWQ-INT4-W4A16/"
+
+MODEL_TEXT_VISION="${ROOT_DIR}/models/cyankiwi__Qwen3.8-27B-AWQ-INT4/"
 MODEL_IMAGE_EDIT="${ROOT_DIR}/models/Qwen__Qwen-Image-Edit-2511/"
 MODEL_VIDEO_WAN="${ROOT_DIR}/models/Wan-AI__Wan2.2-TI2V-5B-Diffusers/"
 
