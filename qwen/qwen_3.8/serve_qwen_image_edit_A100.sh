@@ -82,6 +82,6 @@ exec vllm serve "${MODEL_PATH}" \
   --diffusion-load-format diffusers \
   --vae-use-slicing \
   --vae-use-tiling \
-  --enable-layerwise-offload
-  --cache-backend cache_dit
+  --enable-layerwise-offload \
+  --cache-backend cache_dit \
   --num-inference-steps 20

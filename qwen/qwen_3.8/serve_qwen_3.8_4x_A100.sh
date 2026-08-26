@@ -48,7 +48,7 @@ export CUDA_VISIBLE_DEVICES="0,1"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK=1
-export VLLM_RPC_TIMEOUT=600
+
 
 echo "============================================================"
 echo " ▶️ vLLM High-Throughput Launcher: Qwen 3.6"
