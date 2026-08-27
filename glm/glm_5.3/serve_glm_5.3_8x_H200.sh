@@ -13,9 +13,10 @@ GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-auto}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"
 
-# Hopper (H200/H100) does not support FP8 KV cache for GLM-5.3-Flash (Hybrid KDA/MLA)
-# Using BF16 for KV cache is the verified stable configuration per official docs.
-KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-bfloat16}"
+# H200 (Hopper) supports FP8 KV cache for GLM-5.3-Flash when using vLLM >= 0.29.0
+# FP8 KV cache significantly reduces memory footprint and boosts throughput.
+# If you encounter numerical instability or errors, fallback to bfloat16.
+KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
 DTYPE="${DTYPE:-bfloat16}"
 
 SPEC_METHOD="${SPEC_METHOD:-none}"
