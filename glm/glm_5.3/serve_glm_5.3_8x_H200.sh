@@ -105,7 +105,6 @@ exec vllm serve "${MODEL_PATH}" \
   --served-model-name GLM-5.3-Flash \
   --trust-remote-code \
   --dtype "${DTYPE}" \
-  --quantization "${QUANTIZATION}" \
   --kv-cache-dtype "${KV_CACHE_DTYPE}" \
   --tensor-parallel-size "${TP_SIZE}" \
   --enable-expert-parallel \
