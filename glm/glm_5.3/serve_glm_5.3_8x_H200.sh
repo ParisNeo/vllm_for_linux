@@ -15,7 +15,7 @@ MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"
 
 # Hopper (H200/H100) does not support FP8 KV cache for GLM-5.3-Flash (Hybrid KDA/MLA)
 # Using BF16 for KV cache is the verified stable configuration per official docs.
-KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-bf16}"
+KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-bfloat16}"
 DTYPE="${DTYPE:-bfloat16}"
 
 SPEC_METHOD="${SPEC_METHOD:-none}"
