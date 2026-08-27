@@ -12,9 +12,11 @@ TP_SIZE="${TP_SIZE:-8}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-auto}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"
-KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
+
+# Hopper (H200/H100) does not support FP8 KV cache for GLM-5.3-Flash (Hybrid KDA/MLA)
+# Using BF16 for KV cache is the verified stable configuration per official docs.
+KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-bf16}"
 DTYPE="${DTYPE:-bfloat16}"
-QUANTIZATION="${QUANTIZATION:-compressed-tensors}"
 
 SPEC_METHOD="${SPEC_METHOD:-none}"
 SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}"
@@ -25,6 +27,8 @@ usage() {
   cat <<EOF
 Usage: $(basename "${BASH_SOURCE[0]}") [MODEL_PATH] [OPTIONS]
 Tested Architecture: 8x H200 - Full Tensor Parallel for GLM-5.3-Flash
+
+REQUIRES: vLLM >= 0.29.0
 
 Options:
   --host HOST       Host/interface to bind to (default: ${SERVE_HOST})
@@ -67,6 +71,19 @@ if [[ ! -d "${MODEL_PATH}" ]]; then
   exit 1
 fi
 
+# Verify vLLM version
+VLLM_VERSION=$(vllm --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -n 1)
+if [[ -z "${VLLM_VERSION}" ]]; then
+  echo "⚠️  Could not determine vLLM version. Ensure vLLM is installed in the virtual environment."
+else
+  # Simple check: must be 0.29.0 or higher
+  if [[ "${VLLM_VERSION}" != "0.29."* && "${VLLM_VERSION}" != "0.3"* && "${VLLM_VERSION}" != "1."* ]]; then
+    echo "⚠️  WARNING: vLLM version ${VLLM_VERSION} may not support GLM-5.3-Flash."
+    echo "    Please upgrade to vLLM >= 0.29.0: pip install -U vllm"
+    echo "    Continuing anyway, but startup may fail with weight loading errors."
+  fi
+fi
+
 export CUDA_VISIBLE_DEVICES="${CUDA_DEVICES}"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
@@ -74,8 +91,9 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export VLLM_USE_V1="${VLLM_USE_V1:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK="${FLASHINFER_DISABLE_VERSION_CHECK:-1}"
 
-VLLM_DISABLE_CUDA_GRAPH="${VLLM_DISABLE_CUDA_GRAPH:-1}"
-VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-0}"
+# GLM-5.3 uses specific hybrid attention; disabling standard CUDA graph estimation
+# may help if issues arise, but V1 engine handles it.
+export VLLM_DISABLE_CUDA_GRAPH="${VLLM_DISABLE_CUDA_GRAPH:-0}"
 
 echo "============================================================"
 echo " GLM-5.3-Flash vLLM Launcher"
@@ -90,9 +108,8 @@ echo " Expert Parallel: ENABLED (--enable-expert-parallel)"
 echo " GPU Memory Util: ${GPU_MEM_UTIL}"
 echo " Max Model Len:   ${MAX_MODEL_LEN}"
 echo " Max Num Seqs:    ${MAX_NUM_SEQS}"
-echo " KV Cache Dtype:  ${KV_CACHE_DTYPE}"
+echo " KV Cache Dtype:  ${KV_CACHE_DTYPE} (BF16 required for Hopper)"
 echo " Model Dtype:     ${DTYPE}"
-echo " Quantization:    ${QUANTIZATION}"
 echo " Speculative:     ${SPEC_METHOD} (${SPEC_NUM_TOKENS} tokens)"
 echo " CUDA Devices:    ${CUDA_VISIBLE_DEVICES}"
 echo "============================================================"
