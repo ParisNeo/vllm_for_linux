@@ -93,10 +93,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ===== CUDA GRAPH & CUSTOM ALL-REDUCE SETTINGS =====
-# In vLLM 0.28.0, the custom_all_reduce kernel fails during CUDA graph capture with 'invalid argument'.
-# We must disable custom all-reduce (falling back to NCCL) and force eager mode to bypass the crash.
-ENFORCE_EAGER="${ENFORCE_EAGER:-1}"
+# ===== CUSTOM ALL-REDUCE SETTINGS =====
 DISABLE_CUSTOM_ALL_REDUCE="${DISABLE_CUSTOM_ALL_REDUCE:-1}"
 
 # ===== ACTIVATE VIRTUAL ENVIRONMENT =====
@@ -183,5 +180,4 @@ exec vllm serve "${MODEL_PATH}" \
   --tool-call-parser glm47 \
   --reasoning-parser glm45 \
   --disable-uvicorn-access-log \
-  --disable-custom-all-reduce \
-  $(if [[ "${ENFORCE_EAGER}" == "1" ]]; then echo "--enforce-eager"; fi)
+  $(if [[ "${DISABLE_CUSTOM_ALL_REDUCE}" == "1" ]]; then echo "--disable-custom-all-reduce"; fi)

@@ -69,14 +69,9 @@ fi
 
 export CUDA_VISIBLE_DEVICES="${CUDA_DEVICES}"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
-export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-600}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-export VLLM_USE_V1="${VLLM_USE_V1:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK="${FLASHINFER_DISABLE_VERSION_CHECK:-1}"
 
-# In vLLM 0.28.x, the custom_all_reduce kernel fails during CUDA graph capture with 'invalid argument'.
-# We must disable custom all-reduce (falling back to NCCL) and force eager mode to bypass the crash.
-ENFORCE_EAGER="${ENFORCE_EAGER:-1}"
 DISABLE_CUSTOM_ALL_REDUCE="${DISABLE_CUSTOM_ALL_REDUCE:-1}"
 
 echo "============================================================"
