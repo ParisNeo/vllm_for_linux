@@ -612,7 +612,7 @@ if [ "$USE_UV" -eq 1 ]; then
   print_info "Installing required Python packages with uv..."
   
  uv pip install -U \
-   "vllm==0.26.0" \
+   "vllm==0.28.0" \
     huggingface_hub \
     ascii-colors \
     torchao \
@@ -623,7 +623,7 @@ else
   print_info "Installing required Python packages with pip..."
   python -m pip install --upgrade pip
  python -m pip install -U \
-   "vllm==0.26.0" \
+   "vllm==0.28.0" \
     huggingface_hub \
     ascii-colors \
     torchao
