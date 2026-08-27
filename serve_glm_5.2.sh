@@ -93,10 +93,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ===== CUDA GRAPH SETTINGS =====
-# Disable CUDA graphs via environment variable (compatible with vLLM 0.22.x and 0.23.x)
-VLLM_DISABLE_CUDA_GRAPH="${VLLM_DISABLE_CUDA_GRAPH:-1}"
-VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-0}"
+# ===== CUDA GRAPH & CUSTOM ALL-REDUCE SETTINGS =====
+# In vLLM 0.28.0, the custom_all_reduce kernel fails during CUDA graph capture with 'invalid argument'.
+# We must disable custom all-reduce (falling back to NCCL) and force eager mode to bypass the crash.
+ENFORCE_EAGER="${ENFORCE_EAGER:-1}"
+DISABLE_CUSTOM_ALL_REDUCE="${DISABLE_CUSTOM_ALL_REDUCE:-1}"
 
 # ===== ACTIVATE VIRTUAL ENVIRONMENT =====
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then
@@ -181,4 +182,6 @@ exec vllm serve "${MODEL_PATH}" \
   --enable-auto-tool-choice \
   --tool-call-parser glm47 \
   --reasoning-parser glm45 \
-  --disable-uvicorn-access-log
+  --disable-uvicorn-access-log \
+  --disable-custom-all-reduce \
+  $(if [[ "${ENFORCE_EAGER}" == "1" ]]; then echo "--enforce-eager"; fi)

@@ -74,8 +74,10 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export VLLM_USE_V1="${VLLM_USE_V1:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK="${FLASHINFER_DISABLE_VERSION_CHECK:-1}"
 
-VLLM_DISABLE_CUDA_GRAPH="${VLLM_DISABLE_CUDA_GRAPH:-1}"
-VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-0}"
+# In vLLM 0.28.x, the custom_all_reduce kernel fails during CUDA graph capture with 'invalid argument'.
+# We must disable custom all-reduce (falling back to NCCL) and force eager mode to bypass the crash.
+ENFORCE_EAGER="${ENFORCE_EAGER:-1}"
+DISABLE_CUSTOM_ALL_REDUCE="${DISABLE_CUSTOM_ALL_REDUCE:-1}"
 
 echo "============================================================"
 echo " GLM-5.2 vLLM Launcher"
@@ -139,4 +141,6 @@ exec vllm serve "${MODEL_PATH}" \
   --enable-auto-tool-choice \
   --tool-call-parser glm47 \
   --reasoning-parser glm45 \
-  --disable-uvicorn-access-log
+  --disable-uvicorn-access-log \
+  $(if [[ "${DISABLE_CUSTOM_ALL_REDUCE}" == "1" ]]; then echo "--disable-custom-all-reduce"; fi) \
+  $(if [[ "${ENFORCE_EAGER}" == "1" ]]; then echo "--enforce-eager"; fi)
