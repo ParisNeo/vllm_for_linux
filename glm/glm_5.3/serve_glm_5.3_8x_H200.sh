@@ -73,6 +73,8 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK="${FLASHINFER_DISABLE_VERSION_CHECK:-1}"
 
 DISABLE_CUSTOM_ALL_REDUCE="${DISABLE_CUSTOM_ALL_REDUCE:-1}"
+ENABLE_EXPERT_PARALLEL="${ENABLE_EXPERT_PARALLEL:-0}"
+ENFORCE_EAGER="${ENFORCE_EAGER:-0}"
 
 echo "============================================================"
 echo " GLM-5.3 vLLM Launcher"
@@ -83,7 +85,7 @@ echo " Model:           ${MODEL_PATH}"
 echo " Host:            ${SERVE_HOST}"
 echo " Port:            ${SERVE_PORT}"
 echo " Tensor Parallel: ${TP_SIZE}"
-echo " Expert Parallel: ENABLED (--enable-expert-parallel)"
+echo " Expert Parallel: ${ENABLE_EXPERT_PARALLEL}"
 echo " GPU Memory Util: ${GPU_MEM_UTIL}"
 echo " Max Model Len:   ${MAX_MODEL_LEN}"
 echo " Max Num Seqs:    ${MAX_NUM_SEQS}"
@@ -120,22 +122,35 @@ python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
 echo "Starting vLLM server..."
 
-exec vllm serve "${MODEL_PATH}" \
-  --host "${SERVE_HOST}" \
-  --port "${SERVE_PORT}" \
-  --served-model-name GLM-5.3 \
-  --trust-remote-code \
-  --dtype "${DTYPE}" \
-  --quantization "${QUANTIZATION}" \
-  --kv-cache-dtype "${KV_CACHE_DTYPE}" \
-  --tensor-parallel-size "${TP_SIZE}" \
-  --enable-expert-parallel \
-  --max-model-len "${MAX_MODEL_LEN}" \
-  --gpu-memory-utilization "${GPU_MEM_UTIL}" \
-  --max-num-seqs "${MAX_NUM_SEQS}" \
-  --enable-auto-tool-choice \
-  --tool-call-parser glm47 \
-  --reasoning-parser glm45 \
-  --disable-uvicorn-access-log \
-  $(if [[ "${DISABLE_CUSTOM_ALL_REDUCE}" == "1" ]]; then echo "--disable-custom-all-reduce"; fi) \
-  $(if [[ "${ENFORCE_EAGER}" == "1" ]]; then echo "--enforce-eager"; fi)
+EXEC_ARGS=(
+  vllm serve "${MODEL_PATH}"
+  --host "${SERVE_HOST}"
+  --port "${SERVE_PORT}"
+  --served-model-name GLM-5.3
+  --trust-remote-code
+  --dtype "${DTYPE}"
+  --quantization "${QUANTIZATION}"
+  --kv-cache-dtype "${KV_CACHE_DTYPE}"
+  --tensor-parallel-size "${TP_SIZE}"
+  --max-model-len "${MAX_MODEL_LEN}"
+  --gpu-memory-utilization "${GPU_MEM_UTIL}"
+  --max-num-seqs "${MAX_NUM_SEQS}"
+  --enable-auto-tool-choice
+  --tool-call-parser glm47
+  --reasoning-parser glm45
+  --disable-uvicorn-access-log
+)
+
+if [[ "${ENABLE_EXPERT_PARALLEL}" == "1" ]]; then
+  EXEC_ARGS+=(--enable-expert-parallel)
+fi
+
+if [[ "${DISABLE_CUSTOM_ALL_REDUCE}" == "1" ]]; then
+  EXEC_ARGS+=(--disable-custom-all-reduce)
+fi
+
+if [[ "${ENFORCE_EAGER}" == "1" ]]; then
+  EXEC_ARGS+=(--enforce-eager)
+fi
+
+exec "${EXEC_ARGS[@]}"
