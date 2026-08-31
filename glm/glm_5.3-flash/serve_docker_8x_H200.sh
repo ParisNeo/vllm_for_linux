@@ -63,17 +63,6 @@ if ! command -v docker &>/dev/null; then
 fi
 
 CONTAINER_MODEL_PATH="/data/model"
-BYPASS_VOLUME_NAME="vllm-snap-bypass-$$"
-
-cleanup() {
-  docker rm -f "${BYPASS_VOLUME_NAME}" >/dev/null 2>&1 || true
-}
-trap cleanup EXIT INT TERM
-
-docker create --name "${BYPASS_VOLUME_NAME}" -v "${MODEL_PATH}:${CONTAINER_MODEL_PATH}:ro" busybox:latest >/dev/null 2>&1 || {
-  echo "[ERROR] Failed to create bind mount bypass container." >&2
-  exit 1
-}
 
 IFS=',' read -ra GPU_ARRAY <<< "${DOCKER_DEVICES}"
 echo "============================================================"
@@ -117,7 +106,7 @@ exec docker run --rm \
   --shm-size "${SHM_SIZE}" \
   --ipc=host \
   -p "${SERVE_HOST}:${SERVE_PORT}:8000" \
-  --volumes-from "${BYPASS_VOLUME_NAME}" \
+  -v "${MODEL_PATH}:${CONTAINER_MODEL_PATH}:ro" \
   "${DOCKER_IMAGE}" \
   --model "${CONTAINER_MODEL_PATH}" \
   --host 0.0.0.0 \
