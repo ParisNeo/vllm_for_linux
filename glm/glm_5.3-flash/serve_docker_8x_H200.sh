@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="${ROOT_DIR}/../../venv"
 
 SERVE_HOST="${HOST:-0.0.0.0}"
 SERVE_PORT="${PORT:-8000}"
@@ -53,13 +52,6 @@ done
 
 MODEL_PATH="${MODEL_PATH:-$DEFAULT_MODEL}"
 
-if [[ -f "${VENV_DIR}/bin/activate" ]]; then
-  source "${VENV_DIR}/bin/activate"
-else
-  echo "Virtual environment not found at ${VENV_DIR}" >&2
-  exit 1
-fi
-
 if [[ ! -d "${MODEL_PATH}" ]]; then
   echo "Model path does not exist: ${MODEL_PATH}" >&2
   exit 1
@@ -68,6 +60,27 @@ fi
 if ! command -v docker &>/dev/null; then
   echo "[ERROR] Docker is not installed or not in PATH." >&2
   exit 1
+fi
+
+DOCKER_BIN_PATH="$(readlink -f "$(command -v docker)")"
+if [[ "${DOCKER_BIN_PATH}" == /snap/* ]]; then
+  if [[ "${MODEL_PATH}" == /opt/* ]]; then
+    SNAP_OPT_PATH="/opt/lollms"
+    if ! snap connections docker | grep -q "home ${SNAP_OPT_PATH}"; then
+      echo "[PRE-FLIGHT] Snap Docker detected. Authorizing access to ${SNAP_OPT_PATH}..."
+      sudo snap connect docker home "${SNAP_OPT_PATH}" 2>/dev/null || true
+      sudo snap disconnect docker home 2>/dev/null || true
+      
+      if ! snap connections docker | grep -q "home ${SNAP_OPT_PATH}"; then
+        echo "[ERROR] Snap Docker is restricting access to ${SNAP_OPT_PATH}." >&2
+        echo "        Please run the following commands manually to grant access:" >&2
+        echo "        sudo snap connect docker home ${SNAP_OPT_PATH}" >&2
+        echo "        sudo snap disconnect docker home" >&2
+        exit 1
+      fi
+      echo "[PRE-FLIGHT][OK] Snap Docker authorized for ${SNAP_OPT_PATH}."
+    fi
+  fi
 fi
 
 IFS=',' read -ra GPU_ARRAY <<< "${DOCKER_DEVICES}"
@@ -99,14 +112,15 @@ if [[ "${INSUFFICIENT_MEMORY}" -eq 1 ]]; then
   exit 1
 fi
 
-echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache..."
-python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
-
-echo "Starting vLLM Docker container..."
-
 TP_SIZE=${#GPU_ARRAY[@]}
 
+echo "Starting vLLM Docker container (TP=${TP_SIZE})..."
+
+CONTAINER_USER="$(id -u):$(id -g)"
+
 exec docker run --rm \
+  --user "${CONTAINER_USER}" \
+  -e HOME=/tmp \
   --gpus "\"device=${DOCKER_DEVICES}\"" \
   --shm-size "${SHM_SIZE}" \
   --ipc=host \
@@ -114,6 +128,8 @@ exec docker run --rm \
   -v "${MODEL_PATH}:/data/model:ro" \
   "${DOCKER_IMAGE}" \
   --model /data/model \
+  --host 0.0.0.0 \
+  --port 8000 \
   --tensor-parallel-size "${TP_SIZE}" \
   --quantization fp8 \
   --kv-cache-dtype fp8_e4m3 \

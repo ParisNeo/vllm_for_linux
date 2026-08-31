@@ -10,6 +10,7 @@ DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.8-Flash-Next-FP8"
 
 DOCKER_IMAGE="${DOCKER_IMAGE:-vllm/vllm-openai:qwen38-flash-next}"
 DOCKER_DEVICES="${DOCKER_DEVICES:-0,1,2,3}"
+SHM_SIZE="${SHM_SIZE:-16g}"
 
 usage() {
   cat <<EOF
@@ -21,22 +22,25 @@ Options:
   --port PORT        Port to listen on (default: ${SERVE_PORT})
   --image IMAGE      Docker image to use (default: ${DOCKER_IMAGE})
   --gpus DEVICES     Comma-separated GPU device IDs (default: ${DOCKER_DEVICES})
+  --shm-size SIZE    Docker shared memory size (default: ${SHM_SIZE})
   -h, --help         Show this help message
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --host)    SERVE_HOST="$2"; shift 2 ;;
-    --host=*)  SERVE_HOST="${1#*=}"; shift ;;
-    --port)    SERVE_PORT="$2"; shift 2 ;;
-    --port=*)  SERVE_PORT="${1#*=}"; shift ;;
-    --image)   DOCKER_IMAGE="$2"; shift 2 ;;
-    --image=*) DOCKER_IMAGE="${1#*=}"; shift ;;
-    --gpus)    DOCKER_DEVICES="$2"; shift 2 ;;
-    --gpus=*)  DOCKER_DEVICES="${1#*=}"; shift ;;
-    -h|--help) usage; exit 0 ;;
-    -*)        echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
+    --host)        SERVE_HOST="$2"; shift 2 ;;
+    --host=*)      SERVE_HOST="${1#*=}"; shift ;;
+    --port)        SERVE_PORT="$2"; shift 2 ;;
+    --port=*)      SERVE_PORT="${1#*=}"; shift ;;
+    --image)       DOCKER_IMAGE="$2"; shift 2 ;;
+    --image=*)     DOCKER_IMAGE="${1#*=}"; shift ;;
+    --gpus)        DOCKER_DEVICES="$2"; shift 2 ;;
+    --gpus=*)      DOCKER_DEVICES="${1#*=}"; shift ;;
+    --shm-size)    SHM_SIZE="$2"; shift 2 ;;
+    --shm-size=*)  SHM_SIZE="${1#*=}"; shift ;;
+    -h|--help)     usage; exit 0 ;;
+    -*)            echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
     *)
       if [[ -z "${MODEL_PATH}" ]]; then MODEL_PATH="$1"; else
         echo "Unexpected argument: $1" >&2; usage >&2; exit 1
@@ -56,6 +60,27 @@ fi
 if ! command -v docker &>/dev/null; then
   echo "[ERROR] Docker is not installed or not in PATH." >&2
   exit 1
+fi
+
+DOCKER_BIN_PATH="$(readlink -f "$(command -v docker)")"
+if [[ "${DOCKER_BIN_PATH}" == /snap/* ]]; then
+  if [[ "${MODEL_PATH}" == /opt/* ]]; then
+    SNAP_OPT_PATH="/opt/lollms"
+    if ! snap connections docker | grep -q "home ${SNAP_OPT_PATH}"; then
+      echo "[PRE-FLIGHT] Snap Docker detected. Authorizing access to ${SNAP_OPT_PATH}..."
+      sudo snap connect docker home "${SNAP_OPT_PATH}" 2>/dev/null || true
+      sudo snap disconnect docker home 2>/dev/null || true
+      
+      if ! snap connections docker | grep -q "home ${SNAP_OPT_PATH}"; then
+        echo "[ERROR] Snap Docker is restricting access to ${SNAP_OPT_PATH}." >&2
+        echo "        Please run the following commands manually to grant access:" >&2
+        echo "        sudo snap connect docker home ${SNAP_OPT_PATH}" >&2
+        echo "        sudo snap disconnect docker home" >&2
+        exit 1
+      fi
+      echo "[PRE-FLIGHT][OK] Snap Docker authorized for ${SNAP_OPT_PATH}."
+    fi
+  fi
 fi
 
 IFS=',' read -ra GPU_ARRAY <<< "${DOCKER_DEVICES}"
@@ -97,13 +122,14 @@ exec docker run --rm \
   --user "${CONTAINER_USER}" \
   -e HOME=/tmp \
   --gpus "\"device=${DOCKER_DEVICES}\"" \
+  --shm-size "${SHM_SIZE}" \
   --ipc=host \
-  --network=host \
+  -p "${SERVE_HOST}:${SERVE_PORT}:8000" \
   -v "${MODEL_PATH}:/data/model:ro" \
   "${DOCKER_IMAGE}" \
   --model /data/model \
-  --host "${SERVE_HOST}" \
-  --port "${SERVE_PORT}" \
+  --host 0.0.0.0 \
+  --port 8000 \
   --tensor-parallel-size "${TP_SIZE}" \
   --quantization fp8 \
   --kv-cache-dtype fp8 \
