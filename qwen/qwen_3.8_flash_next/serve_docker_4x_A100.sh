@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="${ROOT_DIR}/../../venv"
 
 SERVE_HOST="${HOST:-0.0.0.0}"
 SERVE_PORT="${PORT:-8000}"
@@ -49,13 +48,6 @@ done
 
 MODEL_PATH="${MODEL_PATH:-$DEFAULT_MODEL}"
 
-if [[ -f "${VENV_DIR}/bin/activate" ]]; then
-  source "${VENV_DIR}/bin/activate"
-else
-  echo "Virtual environment not found at ${VENV_DIR}" >&2
-  exit 1
-fi
-
 if [[ ! -d "${MODEL_PATH}" ]]; then
   echo "Model path does not exist: ${MODEL_PATH}" >&2
   exit 1
@@ -95,21 +87,23 @@ if [[ "${INSUFFICIENT_MEMORY}" -eq 1 ]]; then
   exit 1
 fi
 
-echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache..."
-python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
-
-echo "Starting vLLM Docker container..."
-
 TP_SIZE=${#GPU_ARRAY[@]}
 
+echo "Starting vLLM Docker container (TP=${TP_SIZE})..."
+
+CONTAINER_USER="$(id -u):$(id -g)"
+
 exec docker run --rm \
+  --user "${CONTAINER_USER}" \
+  -e HOME=/tmp \
   --gpus "\"device=${DOCKER_DEVICES}\"" \
   --ipc=host \
-  -p "${SERVE_HOST}:${SERVE_PORT}:8000" \
+  --network=host \
   -v "${MODEL_PATH}:/data/model:ro" \
-  -e VLLM_PLE_CPU_OFFLOAD=1 \
   "${DOCKER_IMAGE}" \
   --model /data/model \
+  --host "${SERVE_HOST}" \
+  --port "${SERVE_PORT}" \
   --tensor-parallel-size "${TP_SIZE}" \
   --quantization fp8 \
   --kv-cache-dtype fp8 \
