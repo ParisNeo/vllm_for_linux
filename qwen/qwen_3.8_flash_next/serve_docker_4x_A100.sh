@@ -62,26 +62,18 @@ if ! command -v docker &>/dev/null; then
   exit 1
 fi
 
-DOCKER_BIN_PATH="$(readlink -f "$(command -v docker)")"
-if [[ "${DOCKER_BIN_PATH}" == /snap/* ]]; then
-  if [[ "${MODEL_PATH}" == /opt/* ]]; then
-    SNAP_OPT_PATH="/opt/lollms"
-    if ! snap connections docker | grep -q "home ${SNAP_OPT_PATH}"; then
-      echo "[PRE-FLIGHT] Snap Docker detected. Authorizing access to ${SNAP_OPT_PATH}..."
-      sudo snap connect docker home "${SNAP_OPT_PATH}" 2>/dev/null || true
-      sudo snap disconnect docker home 2>/dev/null || true
-      
-      if ! snap connections docker | grep -q "home ${SNAP_OPT_PATH}"; then
-        echo "[ERROR] Snap Docker is restricting access to ${SNAP_OPT_PATH}." >&2
-        echo "        Please run the following commands manually to grant access:" >&2
-        echo "        sudo snap connect docker home ${SNAP_OPT_PATH}" >&2
-        echo "        sudo snap disconnect docker home" >&2
-        exit 1
-      fi
-      echo "[PRE-FLIGHT][OK] Snap Docker authorized for ${SNAP_OPT_PATH}."
-    fi
-  fi
-fi
+CONTAINER_MODEL_PATH="/data/model"
+BYPASS_VOLUME_NAME="vllm-snap-bypass-$$"
+
+cleanup() {
+  docker rm -f "${BYPASS_VOLUME_NAME}" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM
+
+docker create --name "${BYPASS_VOLUME_NAME}" -v "${MODEL_PATH}:${CONTAINER_MODEL_PATH}:ro" busybox:latest >/dev/null 2>&1 || {
+  echo "[ERROR] Failed to create bind mount bypass container." >&2
+  exit 1
+}
 
 IFS=',' read -ra GPU_ARRAY <<< "${DOCKER_DEVICES}"
 echo "============================================================"
@@ -125,9 +117,9 @@ exec docker run --rm \
   --shm-size "${SHM_SIZE}" \
   --ipc=host \
   -p "${SERVE_HOST}:${SERVE_PORT}:8000" \
-  -v "${MODEL_PATH}:/data/model:ro" \
+  --volumes-from "${BYPASS_VOLUME_NAME}" \
   "${DOCKER_IMAGE}" \
-  --model /data/model \
+  --model "${CONTAINER_MODEL_PATH}" \
   --host 0.0.0.0 \
   --port 8000 \
   --tensor-parallel-size "${TP_SIZE}" \
