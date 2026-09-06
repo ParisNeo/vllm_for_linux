@@ -55,8 +55,8 @@ def parse_args():
         "positional_model",
         type=str,
         nargs="?",
-        default="tonyd2wild/GLM-5.3-Int4-Int8Mix",
-        help="Hugging Face repo id passed directly (default: tonyd2wild/GLM-5.3-Int4-Int8Mix)",
+        default="Tech2wild/GLM-5.3-Int4-Int8Mix",
+        help="Hugging Face repo id passed directly (default: Tech2wild/GLM-5.3-Int4-Int8Mix)",
     )
     parser.add_argument(
         "--model",
