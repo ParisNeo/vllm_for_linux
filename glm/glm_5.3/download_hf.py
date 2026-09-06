@@ -55,8 +55,8 @@ def parse_args():
         "positional_model",
         type=str,
         nargs="?",
-        default="zai-org/GLM-5.3",
-        help="Hugging Face repo id passed directly (default: zai-org/GLM-5.3)",
+        default="gpustack/GLM-5.3-W4A8",
+        help="Hugging Face repo id passed directly (default: gpustack/GLM-5.3-W4A8)",
     )
     parser.add_argument(
         "--model",
@@ -111,8 +111,8 @@ def main():
         ASCIIColors.red("Error: You must provide a model ID.")
         sys.exit(1)
 
-    if model_id == "zai-org/GLM-5.3":
-        ASCIIColors.cyan("No model specified. Defaulting to zai-org/GLM-5.3.")
+    if model_id == "gpustack/GLM-5.3-W4A8":
+        ASCIIColors.cyan("No model specified. Defaulting to gpustack/GLM-5.3-W4A8.")
 
     script_dir = Path(__file__).parent.resolve()
     base_dir = (script_dir / args.dir).resolve()

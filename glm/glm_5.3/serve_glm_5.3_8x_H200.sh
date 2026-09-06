@@ -4,20 +4,17 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${ROOT_DIR}/../../venv"
 
 MODEL_PATH=""
-DEFAULT_MODEL="${ROOT_DIR}/models/zai-org__GLM-5.3"
+DEFAULT_MODEL="${ROOT_DIR}/models/gpustack__GLM-5.3-W4A8"
 
 SERVE_HOST="${HOST:-0.0.0.0}"
 SERVE_PORT="${PORT:-8000}"
 TP_SIZE="${TP_SIZE:-8}"
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-auto}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"
-KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
+KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8_ds_mla}"
 DTYPE="${DTYPE:-bfloat16}"
-QUANTIZATION="${QUANTIZATION:-fp8}"
-
-SPEC_METHOD="${SPEC_METHOD:-none}"
-SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}"
+QUANTIZATION="${QUANTIZATION:-compressed-tensors}"
 
 CUDA_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 
@@ -73,12 +70,12 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK="${FLASHINFER_DISABLE_VERSION_CHECK:-1}"
 
 DISABLE_CUSTOM_ALL_REDUCE="${DISABLE_CUSTOM_ALL_REDUCE:-1}"
-ENABLE_EXPERT_PARALLEL="${ENABLE_EXPERT_PARALLEL:-0}"
+ENABLE_EXPERT_PARALLEL="${ENABLE_EXPERT_PARALLEL:-1}"
 ENFORCE_EAGER="${ENFORCE_EAGER:-0}"
 
 echo "============================================================"
 echo " GLM-5.3 vLLM Launcher"
-echo " Optimized for 8x H200 (Native FP8 configuration)"
+echo " Optimized for 8x H200 (W4A8 configuration)"
 echo " Environment: Script-relative 'models/' deployment"
 echo "============================================================"
 echo " Model:           ${MODEL_PATH}"
@@ -92,7 +89,7 @@ echo " Max Num Seqs:    ${MAX_NUM_SEQS}"
 echo " KV Cache Dtype:  ${KV_CACHE_DTYPE}"
 echo " Model Dtype:     ${DTYPE}"
 echo " Quantization:    ${QUANTIZATION}"
-echo " Speculative:     ${SPEC_METHOD} (${SPEC_NUM_TOKENS} tokens)"
+echo " Speculative:     MTP (5 tokens)"
 echo " CUDA Devices:    ${CUDA_VISIBLE_DEVICES}"
 echo "============================================================"
 
@@ -139,6 +136,8 @@ EXEC_ARGS=(
   --tool-call-parser glm47
   --reasoning-parser glm45
   --disable-uvicorn-access-log
+  --speculative-config.method mtp
+  --speculative-config.num_speculative_tokens 5
 )
 
 if [[ "${ENABLE_EXPERT_PARALLEL}" == "1" ]]; then
