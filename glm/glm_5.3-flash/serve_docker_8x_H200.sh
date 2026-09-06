@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SERVE_HOST="${HOST:-0.0.0.0}"
+SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8000}"
 MODEL_PATH=""
 DEFAULT_MODEL="${ROOT_DIR}/models/zai-org__GLM-5.3-Flash-FP8"

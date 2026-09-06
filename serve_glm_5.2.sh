@@ -7,7 +7,7 @@ DEFAULT_LOCAL_MODEL="models/QuantTrio__GLM-5.2-Int4-Int8Mix"
 
 # ===== CONFIGURABLE PARAMETERS =====
 MODEL_PATH=""
-SERVE_HOST="${HOST:-0.0.0.0}"
+SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8000}"
 TP_SIZE="${TP_SIZE:-8}"                    # GLM-5.2 verified on TP=8
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"       # 0.90 as per model card
