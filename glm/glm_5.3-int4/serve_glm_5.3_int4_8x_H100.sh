@@ -1,4 +1,3 @@
-```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -14,7 +13,7 @@ SERVE_PORT="${PORT:-8000}"
 TP_SIZE="${TP_SIZE:-8}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.97}"
 
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-262144}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-524288}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-8}"
 MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
 
@@ -305,4 +304,3 @@ printf ' %q' "${EXEC_ARGS[@]}"
 printf '\n'
 
 exec "${EXEC_ARGS[@]}"
-```
