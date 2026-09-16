@@ -50,17 +50,26 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK=1
 export VLLM_RPC_TIMEOUT=600
 
-# Solution de contournement HFValidationError pour vLLM-Omni v0.29.0
-# On mappe le dossier vers un chemin sans double underscore
-CLEAN_LINK="/tmp/qwen_edit_2511"
-rm -f "${CLEAN_LINK}"
-ln -s "${ABS_MODEL_PATH}" "${CLEAN_LINK}"
+# ==============================================================================
+# 🥷 CHEAT : Simulation du cache officiel de Hugging Face
+# Permet de contourner le bug HFValidationError de vLLM-Omni 0.29.0 sur les chemins locaux
+# ==============================================================================
+FAKE_HF_CACHE="${HOME}/.cache/huggingface/hub/models--Qwen--Qwen-Image-Edit/snapshots/abcdef1234567890"
+
+echo "[CHEAT] Configuration du leurre de cache Hugging Face..."
+mkdir -p "$(dirname "${FAKE_HF_CACHE}")"
+rm -f "${FAKE_HF_CACHE}"
+ln -s "${ABS_MODEL_PATH}" "${FAKE_HF_CACHE}"
+
+# Mode offline strict pour empêcher toute validation réseau par Hugging Face
+export HF_HUB_OFFLINE=1
+# ==============================================================================
 
 echo "============================================================"
-echo " ▶️ vLLM Launcher: Qwen Image Editing (v0.29.0 Optimized)"
+echo " ▶️ vLLM Launcher: Qwen Image Editing (v0.29.0 Cheat Mode)"
 echo " Target Arch: 1x A100 40GB (Isolating on GPU 3 alongside Qwen 3.6 TP)"
-echo " Source Path: ${ABS_MODEL_PATH}"
-echo " Clean Link:  ${CLEAN_LINK}"
+echo " Real Path:   ${ABS_MODEL_PATH}"
+echo " HF Leurre:   ${FAKE_HF_CACHE}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
 
@@ -80,8 +89,8 @@ fi
 echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache to prevent fragmentation locks..."
 python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
-# Lancement officiel adapté à vLLM 0.29.0 / vLLM-Omni
-exec vllm serve "${CLEAN_LINK}" \
+# Lancement officiel avec l'ID du dépôt virtuel leurré et paramètres 0.29.0
+exec vllm serve "Qwen/Qwen-Image-Edit" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
   --omni \
