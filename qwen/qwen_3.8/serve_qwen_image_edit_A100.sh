@@ -84,4 +84,5 @@ exec vllm serve "${ABS_MODEL_PATH}" \
   --vae-use-tiling \
   --enable-layerwise-offload \
   --cache-backend cache_dit \
+  --model-type qwen_image_edit \
   --enforce-eager
