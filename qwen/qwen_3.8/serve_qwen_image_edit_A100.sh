@@ -51,25 +51,17 @@ export FLASHINFER_DISABLE_VERSION_CHECK=1
 export VLLM_RPC_TIMEOUT=600
 
 # ==============================================================================
-# 🥷 CHEAT : Simulation du cache officiel de Hugging Face
-# Permet de contourner le bug HFValidationError de vLLM-Omni 0.29.0 sur les chemins locaux
+# 🎯 FORÇAGE DU CHEMIN LOCAL VIA VLLM
+# On utilise la variable native de vLLM pour mapper l'ID demandé vers votre dossier
 # ==============================================================================
-FAKE_HF_CACHE="${HOME}/.cache/huggingface/hub/models--Qwen--Qwen-Image-Edit/snapshots/abcdef1234567890"
-
-echo "[CHEAT] Configuration du leurre de cache Hugging Face..."
-mkdir -p "$(dirname "${FAKE_HF_CACHE}")"
-rm -f "${FAKE_HF_CACHE}"
-ln -s "${ABS_MODEL_PATH}" "${FAKE_HF_CACHE}"
-
-# Mode offline strict pour empêcher toute validation réseau par Hugging Face
+export VLLM_CHECKPOINT_DIR="${ABS_MODEL_PATH}"
 export HF_HUB_OFFLINE=1
 # ==============================================================================
 
 echo "============================================================"
-echo " ▶️ vLLM Launcher: Qwen Image Editing (v0.29.0 Cheat Mode)"
+echo " ▶️ vLLM Launcher: Qwen Image Editing (v0.29.0 Direct Route)"
 echo " Target Arch: 1x A100 40GB (Isolating on GPU 3 alongside Qwen 3.6 TP)"
-echo " Real Path:   ${ABS_MODEL_PATH}"
-echo " HF Leurre:   ${FAKE_HF_CACHE}"
+echo " Target Path: ${ABS_MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
 
@@ -89,7 +81,8 @@ fi
 echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache to prevent fragmentation locks..."
 python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
-# Lancement officiel avec l'ID du dépôt virtuel leurré et paramètres 0.29.0
+# On passe un nom virtuel "Qwen/Qwen-Image-Edit" pour valider la Regex Hugging Face,
+# mais VLLM_CHECKPOINT_DIR va forcer vLLM à charger le contenu de ${ABS_MODEL_PATH}.
 exec vllm serve "Qwen/Qwen-Image-Edit" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
