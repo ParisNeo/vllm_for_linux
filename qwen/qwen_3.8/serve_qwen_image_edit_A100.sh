@@ -84,4 +84,3 @@ exec vllm serve "${MODEL_PATH}" \
   --vae-use-tiling \
   --enable-layerwise-offload \
   --cache-backend cache_dit \
-  --num-inference-steps 20
