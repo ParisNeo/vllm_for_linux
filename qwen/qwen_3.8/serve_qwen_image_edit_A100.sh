@@ -51,17 +51,23 @@ export FLASHINFER_DISABLE_VERSION_CHECK=1
 export VLLM_RPC_TIMEOUT=600
 
 # ==============================================================================
-# 🎯 FORÇAGE DU CHEMIN LOCAL VIA VLLM
-# On utilise la variable native de vLLM pour mapper l'ID demandé vers votre dossier
+# 🔥 FIX DÉFINITIF POUR V0.29.0
+# On nettoie le nom en créant un lien symbolique standard sans "__"
 # ==============================================================================
-export VLLM_CHECKPOINT_DIR="${ABS_MODEL_PATH}"
+CLEAN_LOCAL_PATH="/tmp/qwen-image-edit-2511"
+rm -f "${CLEAN_LOCAL_PATH}"
+ln -s "${ABS_MODEL_PATH}" "${CLEAN_LOCAL_PATH}"
+
+# On bloque l'accès internet pour garantir l'utilisation des fichiers locaux
 export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
 # ==============================================================================
 
 echo "============================================================"
-echo " ▶️ vLLM Launcher: Qwen Image Editing (v0.29.0 Direct Route)"
+echo " ▶️ vLLM Launcher: Qwen Image Editing (v0.29.0 Local Fix)"
 echo " Target Arch: 1x A100 40GB (Isolating on GPU 3 alongside Qwen 3.6 TP)"
-echo " Target Path: ${ABS_MODEL_PATH}"
+echo " Original:    ${ABS_MODEL_PATH}"
+echo " Clean Path:  ${CLEAN_LOCAL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
 
@@ -81,9 +87,9 @@ fi
 echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache to prevent fragmentation locks..."
 python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
-# On passe un nom virtuel "Qwen/Qwen-Image-Edit" pour valider la Regex Hugging Face,
-# mais VLLM_CHECKPOINT_DIR va forcer vLLM à charger le contenu de ${ABS_MODEL_PATH}.
-exec vllm serve "Qwen/Qwen-Image-Edit" \
+# On passe le chemin absolu nettoyé directement. vLLM-Omni va détecter qu'il s'agit 
+# d'un dossier via os.path.exists() et bypasser totalement snapshot_download().
+exec vllm serve "${CLEAN_LOCAL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
   --omni \
