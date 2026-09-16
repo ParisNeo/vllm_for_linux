@@ -79,7 +79,6 @@ exec vllm serve "${MODEL_PATH}" \
   --max-model-len 4096 \
   --gpu-memory-utilization 0.85 \
   --omni \
-  --diffusion-load-format diffusers \
   --vae-use-slicing \
   --vae-use-tiling \
   --enable-layerwise-offload \
