@@ -72,9 +72,8 @@ fi
 echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache to prevent fragmentation locks..."
 python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 MODEL_PATH="${MODEL_PATH:-$DEFAULT_MODEL}"
-ABS_MODEL_PATH=$(realpath "${MODEL_PATH}")
 
-exec vllm serve "${ABS_MODEL_PATH}" \
+exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST:-localhost}" \
   --port "${SERVE_PORT:-8091}" \
   --omni \
