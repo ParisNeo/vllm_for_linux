@@ -38,7 +38,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 MODEL_PATH="${MODEL_PATH:-$DEFAULT_MODEL}"
-ABS_MODEL_PATH=$(realpath "${MODEL_PATH}")
 
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; else
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
@@ -50,24 +49,10 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK=1
 export VLLM_RPC_TIMEOUT=600
 
-# ==============================================================================
-# 🔥 FIX DÉFINITIF POUR V0.29.0
-# On nettoie le nom en créant un lien symbolique standard sans "__"
-# ==============================================================================
-CLEAN_LOCAL_PATH="/tmp/qwen-image-edit-2511"
-rm -f "${CLEAN_LOCAL_PATH}"
-ln -s "${ABS_MODEL_PATH}" "${CLEAN_LOCAL_PATH}"
-
-# On bloque l'accès internet pour garantir l'utilisation des fichiers locaux
-export HF_HUB_OFFLINE=1
-export TRANSFORMERS_OFFLINE=1
-# ==============================================================================
-
 echo "============================================================"
-echo " ▶️ vLLM Launcher: Qwen Image Editing (v0.29.0 Local Fix)"
+echo " ▶️ vLLM Launcher: Qwen Image Editing"
 echo " Target Arch: 1x A100 40GB (Isolating on GPU 3 alongside Qwen 3.6 TP)"
-echo " Original:    ${ABS_MODEL_PATH}"
-echo " Clean Path:  ${CLEAN_LOCAL_PATH}"
+echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
 
@@ -87,16 +72,15 @@ fi
 echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache to prevent fragmentation locks..."
 python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
-# On passe le chemin absolu nettoyé directement. vLLM-Omni va détecter qu'il s'agit 
-# d'un dossier via os.path.exists() et bypasser totalement snapshot_download().
-exec vllm serve "${CLEAN_LOCAL_PATH}" \
+exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
-  --omni \
   --tensor-parallel-size 1 \
+  --max-model-len 4096 \
+  --gpu-memory-utilization 0.85 \
+  --omni \
   --diffusion-load-format diffusers \
   --vae-use-slicing \
   --vae-use-tiling \
   --enable-layerwise-offload \
-  --cache-backend cache_dit \
-  --enforce-eager
+  --cache-backend cache_dit
