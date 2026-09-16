@@ -6,7 +6,7 @@ VENV_DIR="${ROOT_DIR}/../../venv"
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8001}"
 MODEL_PATH=""
-DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen-Image-Edit-2511"
+DEFAULT_MODEL="./models/Qwen__Qwen-Image-Edit-2511"
 
 usage() {
   cat <<EOF
@@ -84,5 +84,4 @@ exec vllm serve "${ABS_MODEL_PATH}" \
   --vae-use-tiling \
   --enable-layerwise-offload \
   --cache-backend cache_dit \
-  --architecture QwenImageEdit \
   --enforce-eager
