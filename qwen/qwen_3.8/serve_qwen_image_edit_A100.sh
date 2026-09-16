@@ -6,7 +6,7 @@ VENV_DIR="${ROOT_DIR}/../../venv"
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8001}"
 MODEL_PATH=""
-DEFAULT_MODEL="./models/Qwen__Qwen-Image-Edit-2511"
+DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen-Image-Edit-2511"
 
 usage() {
   cat <<EOF
@@ -38,6 +38,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 MODEL_PATH="${MODEL_PATH:-$DEFAULT_MODEL}"
+ABS_MODEL_PATH=$(realpath "${MODEL_PATH}")
 
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; else
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
@@ -49,10 +50,17 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK=1
 export VLLM_RPC_TIMEOUT=600
 
+# Solution de contournement HFValidationError pour vLLM-Omni v0.29.0
+# On mappe le dossier vers un chemin sans double underscore
+CLEAN_LINK="/tmp/qwen_edit_2511"
+rm -f "${CLEAN_LINK}"
+ln -s "${ABS_MODEL_PATH}" "${CLEAN_LINK}"
+
 echo "============================================================"
-echo " ▶️ vLLM Launcher: Qwen Image Editing"
+echo " ▶️ vLLM Launcher: Qwen Image Editing (v0.29.0 Optimized)"
 echo " Target Arch: 1x A100 40GB (Isolating on GPU 3 alongside Qwen 3.6 TP)"
-echo " Model:       ${MODEL_PATH}"
+echo " Source Path: ${ABS_MODEL_PATH}"
+echo " Clean Link:  ${CLEAN_LINK}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
 
@@ -71,11 +79,11 @@ fi
 
 echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache to prevent fragmentation locks..."
 python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
-MODEL_PATH="${MODEL_PATH:-$DEFAULT_MODEL}"
 
-exec vllm serve "${MODEL_PATH}" \
-  --host "${SERVE_HOST:-localhost}" \
-  --port "${SERVE_PORT:-8091}" \
+# Lancement officiel adapté à vLLM 0.29.0 / vLLM-Omni
+exec vllm serve "${CLEAN_LINK}" \
+  --host "${SERVE_HOST}" \
+  --port "${SERVE_PORT}" \
   --omni \
   --tensor-parallel-size 1 \
   --diffusion-load-format diffusers \
