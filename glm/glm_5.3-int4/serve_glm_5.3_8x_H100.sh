@@ -4,7 +4,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${ROOT_DIR}/../../venv"
 
 MODEL_PATH=""
-DEFAULT_MODEL="${ROOT_DIR}/models/QuantTrio__GLM-5.2-Int4-Int8Mix"
+DEFAULT_MODEL="${ROOT_DIR}/models/Tech2wild__GLM-5.3-Int4-Int8Mix"
 
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8000}"
