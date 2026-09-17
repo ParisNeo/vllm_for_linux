@@ -24,7 +24,7 @@ CUDA_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 usage() {
   cat <<EOF
 Usage: $(basename "${BASH_SOURCE[0]}") [MODEL_PATH] [OPTIONS]
-Tested Architecture: 8x H200 - Full Tensor Parallel for GLM-5.2
+Tested Architecture: 8x H200 - Full Tensor Parallel for GLM-5.3
 
 Options:
   --host HOST       Host/interface to bind to (default: ${SERVE_HOST})
@@ -75,7 +75,7 @@ export FLASHINFER_DISABLE_VERSION_CHECK="${FLASHINFER_DISABLE_VERSION_CHECK:-1}"
 DISABLE_CUSTOM_ALL_REDUCE="${DISABLE_CUSTOM_ALL_REDUCE:-1}"
 
 echo "============================================================"
-echo " GLM-5.2 vLLM Launcher"
+echo " GLM-5.3 vLLM Launcher"
 echo " Optimized for 8x H200 (verified configuration)"
 echo " Environment: Script-relative 'models/' deployment"
 echo "============================================================"
@@ -123,7 +123,7 @@ echo "Starting vLLM server..."
 exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
-  --served-model-name GLM-5.2 \
+  --served-model-name GLM-5.3 \
   --trust-remote-code \
   --dtype "${DTYPE}" \
   --quantization "${QUANTIZATION}" \
