@@ -6,7 +6,7 @@ VENV_DIR="${ROOT_DIR}/../../venv"
 MODEL_PATH=""
 DEFAULT_MODEL="${ROOT_DIR}/models/Tech2wild__GLM-5.3-Int4-Int8Mix"
 
-SERVE_HOST="${HOST:-0.0.0.0}"
+SERVE_HOST="${HOST:-localhost}"
 SERVE_PORT="${PORT:-8000}"
 TP_SIZE="${TP_SIZE:-8}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"
