@@ -199,3 +199,4 @@ runners/*.sh
 
 .lollms
 .vscode
+.lollms_code
