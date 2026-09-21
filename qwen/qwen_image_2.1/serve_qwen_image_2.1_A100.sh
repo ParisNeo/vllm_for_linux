@@ -9,8 +9,6 @@ MODEL_PATH=""
 DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen-Image-2.1"
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.85}"
-NUM_INFERENCE_STEPS="${NUM_INFERENCE_STEPS:-40}"
-CFG_SCALE="${CFG_SCALE:-1.0}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
 
 # Opt-in: FP8 prefix KV cache ("fp8_v" quantizes V only ~41dB PSNR, "fp8" also K ~35dB).
@@ -41,9 +39,12 @@ Options:
   --gpu GPU_ID      Physical GPU to isolate on (default: ${TARGET_GPU})
   -h, --help        Show this help message
 
-Environment overrides: GPU_MEM_UTIL, NUM_INFERENCE_STEPS, CFG_SCALE,
-MAX_MODEL_LEN, PREFIX_KV_CACHE_DTYPE, ENABLE_STEP_EXECUTION, MAX_NUM_SEQS,
-ENFORCE_EAGER, TARGET_GPU, MIN_FREE_MB
+Environment overrides: GPU_MEM_UTIL, MAX_MODEL_LEN, PREFIX_KV_CACHE_DTYPE,
+ENABLE_STEP_EXECUTION, MAX_NUM_SEQS, ENFORCE_EAGER, TARGET_GPU, MIN_FREE_MB
+
+Per-request contract (server defaults do NOT match this checkpoint):
+  num_inference_steps: 40   (server default is 50)
+  true_cfg_scale:      1.0  (server default is 4.0; only engages with a negative_prompt)
 EOF
 }
 
@@ -91,7 +92,9 @@ echo " Target Arch: 1x A100 40GB (Isolating on GPU ${TARGET_GPU})"
 echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo " Mem Util:    ${GPU_MEM_UTIL} (BF16 peak ~34GB at 1024x1024/40 steps)"
-echo " Steps/CFG:   ${NUM_INFERENCE_STEPS} / ${CFG_SCALE}"
+echo "============================================================"
+echo " ⚠️  Send per request: num_inference_steps=40, true_cfg_scale=1.0"
+echo "    (server defaults 50 steps / CFG 4.0 do NOT match this checkpoint)"
 echo "============================================================"
 
 echo "[PRE-FLIGHT] Checking GPU memory availability on physical GPU ${TARGET_GPU}..."
@@ -118,8 +121,6 @@ EXEC_ARGS=(
   --omni
   --max-model-len "${MAX_MODEL_LEN}"
   --gpu-memory-utilization "${GPU_MEM_UTIL}"
-  --num-inference-steps "${NUM_INFERENCE_STEPS}"
-  --cfg-scale "${CFG_SCALE}"
   --vae-use-slicing
   --vae-use-tiling
 )

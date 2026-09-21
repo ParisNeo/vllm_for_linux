@@ -113,7 +113,7 @@ curl -X POST http://localhost:8001/v1/chat/completions \
 
 ## 🧠 Behavior Notes
 
-- **Sampling defaults**: The server bakes in `--num-inference-steps 40 --cfg-scale 1.0`, matching this checkpoint. The raw server default is 50 steps, so always send `num_inference_steps` per request to be explicit.
+- **Sampling defaults are per-request only**: The vLLM-Omni serve CLI does not expose `--num-inference-steps` / `--cfg-scale` (they exist only in the offline inference examples). The server's own defaults are 50 steps and CFG 4.0, which do **not** match this checkpoint — every client must send `num_inference_steps: 40` and `true_cfg_scale: 1.0` in the request body.
 - **CFG**: `true_cfg_scale` above 1 only engages alongside a `negative_prompt`; otherwise it is ignored with a warning. When it engages, the DiT runs twice per step, roughly doubling latency.
 - **Prefix KV cache**: On automatically and rebuilt per generation. Repeating a prompt costs about a third of the first submission; four reference images leave only about a fifth of the sequence to recompute.
 - **CUDA graphs**: Fixed-shape decode steps are captured automatically. Expect the first request after startup to cost about 1.3x a later one.
@@ -134,8 +134,6 @@ The serving script includes automated pre-flight safety checks:
 | `PORT` | `8001` | Port for the OpenAI-compatible API. |
 | `TARGET_GPU` | `3` | Physical GPU to isolate the pipeline on. |
 | `GPU_MEM_UTIL` | `0.85` | vLLM GPU memory utilization limit. |
-| `NUM_INFERENCE_STEPS` | `40` | Default denoising steps (checkpoint-verified). |
-| `CFG_SCALE` | `1.0` | Classifier-free guidance scale (engages only with a negative prompt). |
 | `MAX_MODEL_LEN` | `4096` | Maximum text-encoder context length. |
 | `PREFIX_KV_CACHE_DTYPE` | *(empty)* | Opt-in FP8 prefix KV cache: `fp8_v` (~41dB PSNR) or `fp8` (~35dB). Forces eager decode. |
 | `ENABLE_STEP_EXECUTION` | `0` | Set to `1` for step-level continuous batching with `--max-num-seqs`. |
