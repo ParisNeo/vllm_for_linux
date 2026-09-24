@@ -24,7 +24,7 @@ MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"
 # H100 is Hopper (sm90) and has native FP8 support, so an FP8 KV cache is
 # valid here. If you observe numerical instability or errors, fall back:
 #   KV_CACHE_DTYPE=bfloat16 ./serve\ GLM\ 5.3\ H100
-KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
+KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-bfloat16}"
 DTYPE="${DTYPE:-bfloat16}"
 
 SPEC_METHOD="${SPEC_METHOD:-none}"
@@ -121,7 +121,7 @@ echo " Expert Parallel: ENABLED (--enable-expert-parallel)"
 echo " GPU Memory Util: ${GPU_MEM_UTIL}"
 echo " Max Model Len:   ${MAX_MODEL_LEN}"
 echo " Max Num Seqs:    ${MAX_NUM_SEQS}"
-echo " KV Cache Dtype:  ${KV_CACHE_DTYPE} (fp8 on Hopper sm90, fallback: bfloat16)"
+echo " KV Cache Dtype:  ${KV_CACHE_DTYPE} ("bfloat16")"
 echo " Model Dtype:     ${DTYPE}"
 echo " Speculative:     ${SPEC_METHOD} (${SPEC_NUM_TOKENS} tokens)"
 echo " CUDA Devices:    ${CUDA_DEVICES}"
