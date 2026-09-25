@@ -11,7 +11,7 @@ DEFAULT_MODEL="${ROOT_DIR}/models/Qwen__Qwen3.8-Flash-Next-FP8"
 usage() {
   cat <<EOF
 Usage: $(basename "${BASH_SOURCE[0]}") [MODEL_PATH] [OPTIONS]
-Tested Architecture: 2x A100 (40GB) - Frees GPUs 2 and 3 for other workloads
+Tested Architecture: 4x A100 (40GB) - Full node allocation for large context MoE
 
 Options:
   --host HOST        Host/interface (default: ${SERVE_HOST})
@@ -43,48 +43,52 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-export CUDA_VISIBLE_DEVICES="0,1"
+# Allocation des 4 GPU pour le Tensor Parallel 4
+export CUDA_VISIBLE_DEVICES="0,1,2,3"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export FLASHINFER_DISABLE_VERSION_CHECK=1
 export VLLM_RPC_TIMEOUT=600
 
 echo "============================================================"
-echo " ▶️ vLLM High-Throughput Launcher: Qwen 3.8 Flash Next (FP8)"
-echo " Target Arch: 2x A100 40GB (Tensor Parallel on GPUs 0,1)"
+echo " ▶️ vLLM High-Throughput Launcher: Qwen 3.8 Flash Next"
+echo " Target Arch: 4x A100 40GB (Tensor Parallel on GPUs 0,1,2,3)"
 echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
 
-echo "[PRE-FLIGHT] Checking GPU memory availability on physical GPUs 0,1..."
+echo "[PRE-FLIGHT] Checking GPU memory availability on physical GPUs 0,1,2,3..."
 GPU_MEM_FREE_0=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i 0 | tr -d '[:space:]')
 GPU_MEM_FREE_1=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i 1 | tr -d '[:space:]')
+GPU_MEM_FREE_2=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i 2 | tr -d '[:space:]')
+GPU_MEM_FREE_3=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i 3 | tr -d '[:space:]')
 
-if [[ -z "${GPU_MEM_FREE_0}" || -z "${GPU_MEM_FREE_1}" ]]; then
-  echo "[PRE-FLIGHT][WARN] Could not query free memory for GPUs 0,1. Proceeding anyway."
-elif [[ "${GPU_MEM_FREE_0}" -lt 15360 || "${GPU_MEM_FREE_1}" -lt 15360 ]]; then
+if [[ -z "${GPU_MEM_FREE_0}" || -z "${GPU_MEM_FREE_1}" || -z "${GPU_MEM_FREE_2}" || -z "${GPU_MEM_FREE_3}" ]]; then
+  echo "[PRE-FLIGHT][WARN] Could not query free memory for all 4 GPUs. Proceeding anyway."
+elif [[ "${GPU_MEM_FREE_0}" -lt 15360 || "${GPU_MEM_FREE_1}" -lt 15360 || "${GPU_MEM_FREE_2}" -lt 15360 || "${GPU_MEM_FREE_3}" -lt 15360 ]]; then
   echo "[PRE-FLIGHT][ERROR] Insufficient free memory on target GPUs."
-  echo "                 GPU 0: ${GPU_MEM_FREE_0}MiB free / GPU 1: ${GPU_MEM_FREE_1}MiB free"
+  echo "                 GPU 0: ${GPU_MEM_FREE_0}MiB | GPU 1: ${GPU_MEM_FREE_1}MiB"
+  echo "                 GPU 2: ${GPU_MEM_FREE_2}MiB | GPU 3: ${GPU_MEM_FREE_3}MiB"
   echo "                 At least 15360MiB is required per GPU."
   exit 1
 else
-  echo "[PRE-FLIGHT][OK] GPU 0: ${GPU_MEM_FREE_0}MiB free | GPU 1: ${GPU_MEM_FREE_1}MiB free"
+  echo "[PRE-FLIGHT][OK] Memory clear on all 4 targets (0,1,2,3)."
 fi
 
 echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache..."
 python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
+# Execution avec répartition sur 4 GPU et désactivation des kernels de calcul FP8 incompatibles Ampere
 exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
-  --tensor-parallel-size 2 \
+  --tensor-parallel-size 4 \
   --disable-custom-all-reduce \
-  --quantization fp8 \
   --dtype bfloat16 \
   --kv-cache-dtype auto \
   --max-model-len 262144 \
   --max-num-seqs 128 \
-  --gpu-memory-utilization 0.92 \
+  --gpu-memory-utilization 0.88 \
   --enable-prefix-caching \
   --trust-remote-code \
   --reasoning-parser qwen3 \
