@@ -43,7 +43,7 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-# Allocation des 4 GPU pour le Tensor Parallel 4
+# Allocation complète des 4 GPU de calcul
 export CUDA_VISIBLE_DEVICES="0,1,2,3"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
@@ -78,21 +78,55 @@ fi
 echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache..."
 python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
-# Execution en forçant vLLM à ignorer le backend de quantification FP8 MoE natif
-exec vllm serve "${MODEL_PATH}" \
-  --host "${SERVE_HOST}" \
-  --port "${SERVE_PORT}" \
-  --tensor-parallel-size 4 \
-  --disable-custom-all-reduce \
-  --quantization unquantized \
-  --dtype bfloat16 \
-  --kv-cache-dtype auto \
-  --max-model-len 262144 \
-  --max-num-seqs 128 \
-  --gpu-memory-utilization 0.88 \
-  --enable-prefix-caching \
-  --trust-remote-code \
-  --reasoning-parser qwen3 \
-  --default-chat-template-kwargs '{"enable_thinking": false}' \
-  --limit-mm-per-prompt '{"image": 4}'
+# Lancement propre en contournant la détection FP8 du modèle
+# Au lieu de 'vllm serve', on lance via un script Python en ligne qui nettoie la config à la volée
+exec python -c "
+import json
+import os
+import sys
+from transformers import AutoConfig
+from vllm.entrypoints.openai.api_server import main
 
+# 1. Charger et patcher la config en mémoire pour supprimer le bloc FP8 encombrant
+model_path = '${MODEL_PATH}'
+config_file = os.path.join(model_path, 'config.json')
+
+if os.path.exists(config_file):
+    with open(config_file, 'r') as f:
+        config_data = json.load(f)
+    
+    if 'quantization_config' in config_data:
+        print('[PATCH] Suppression dynamique de quantization_config en mémoire...')
+        del config_data['quantization_config']
+        
+        # On force transformers/vllm à lire notre version modifiée en surchargeant la méthode de cache
+        original_from_pretrained = AutoConfig.from_pretrained
+        def patched_from_pretrained(pretrained_model_name_or_path, **kwargs):
+            if pretrained_model_name_or_path == model_path:
+                return AutoConfig.from_dict(config_data)
+            return original_from_pretrained(pretrained_model_name_or_path, **kwargs)
+        AutoConfig.from_pretrained = patched_from_pretrained
+
+# 2. Reconstruire les arguments pour le serveur vLLM
+sys.argv = [
+    'vllm', 'serve', model_path,
+    '--host', '${SERVE_HOST}',
+    '--port', '${SERVE_PORT}',
+    '--tensor-parallel-size', '4',
+    '--disable-custom-all-reduce',
+    '--quantization', 'unquantized',
+    '--dtype', 'bfloat16',
+    '--kv-cache-dtype', 'auto',
+    '--max-model-len', '262144',
+    '--max-num-seqs', '128',
+    '--gpu-memory-utilization', '0.88',
+    '--enable-prefix-caching',
+    '--trust-remote-code',
+    '--reasoning-parser', 'qwen3',
+    '--default-chat-template-kwargs', '{\"enable_thinking\": false}',
+    '--limit-mm-per-prompt', '{\"image\": 4}'
+]
+
+# 3. Lancer le serveur vLLM standard
+main()
+"
