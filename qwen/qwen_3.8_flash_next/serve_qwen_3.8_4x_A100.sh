@@ -80,7 +80,8 @@ exec vllm serve "${MODEL_PATH}" \
   --tensor-parallel-size 2 \
   --disable-custom-all-reduce \
   --quantization fp8 \
-  --kv-cache-dtype fp8 \
+  --dtype bfloat16 \
+  --kv-cache-dtype auto \
   --max-model-len 262144 \
   --max-num-seqs 128 \
   --gpu-memory-utilization 0.92 \
