@@ -78,12 +78,13 @@ fi
 echo "[PRE-FLIGHT] Clearing PyTorch distributed and CUDA cache..."
 python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
-# Execution avec répartition sur 4 GPU et désactivation des kernels de calcul FP8 incompatibles Ampere
+# Execution en forçant vLLM à ignorer le backend de quantification FP8 MoE natif
 exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 4 \
   --disable-custom-all-reduce \
+  --quantization unquantized \
   --dtype bfloat16 \
   --kv-cache-dtype auto \
   --max-model-len 262144 \
@@ -94,3 +95,4 @@ exec vllm serve "${MODEL_PATH}" \
   --reasoning-parser qwen3 \
   --default-chat-template-kwargs '{"enable_thinking": false}' \
   --limit-mm-per-prompt '{"image": 4}'
+
