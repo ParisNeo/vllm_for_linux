@@ -46,25 +46,30 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-# --- SECTION TÉLÉCHARGEMENT ---
+# --- SECTION TÉLÉCHARGEMENT ADAPTÉE POUR 'hf' ---
 if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ! -d "${DEFAULT_MODEL}" ]]; then
   echo "============================================================"
   echo " 📥 Modèle local introuvable. Téléchargement depuis Hugging Face..."
   echo " Repo:   ${HF_REPO}"
   echo " Cible:  ${DEFAULT_MODEL}"
+  echo " Utility: hf (New CLI)"
   echo "============================================================"
   
-  # Vérification de la présence de huggingface-cli
-  if ! command -v huggingface-cli &> /dev/null; then
-    echo "[DOWNLOAD] Installation temporaire de huggingface_hub..."
-    pip install -q huggingface_hub
+  # Vérification de la présence de la commande 'hf' globale ou dans l'environnement
+  if ! command -v hf &> /dev/null; then
+    echo "[DOWNLOAD][ERROR] La commande 'hf' n'a pas été trouvée dans votre PATH."
+    echo "                  Veuillez vérifier son installation en dehors du venv."
+    exit 1
   fi
   
-  # Téléchargement vers le sous-dossier spécifié
-  huggingface-cli download "${HF_REPO}" --local-dir "${DEFAULT_MODEL}" --local-dir-use-symlinks False
+  # Création du dossier cible pour éviter tout conflit de structure
+  mkdir -p "${DEFAULT_MODEL}"
+  
+  # Utilisation de la nouvelle CLI recommandée pour télécharger le dépôt entier
+  hf download "${HF_REPO}" --local-dir "${DEFAULT_MODEL}"
   echo "[DOWNLOAD][OK] Téléchargement terminé avec succès !"
 fi
-# ------------------------------
+# ------------------------------------------------
 
 export CUDA_VISIBLE_DEVICES="3"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
