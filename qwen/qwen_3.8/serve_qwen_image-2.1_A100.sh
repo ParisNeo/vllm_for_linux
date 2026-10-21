@@ -6,6 +6,8 @@ VENV_DIR="${ROOT_DIR}/../../venv"
 SERVE_HOST="${HOST:-127.0.0.1}"
 SERVE_PORT="${PORT:-8001}"
 MODEL_PATH=""
+FORCE_DOWNLOAD=false
+CONTINUE_DOWNLOAD=false
 
 # Configuration pour Qwen-Image-2.1-Turbo
 HF_REPO="Qwen/Qwen-Image-2.1-Turbo"
@@ -17,20 +19,24 @@ Usage: $(basename "${BASH_SOURCE[0]}") [MODEL_PATH] [OPTIONS]
 Tested Architecture: A100 (40GB) - Isolates on 1 single GPU
 
 Options:
-  --host HOST       Host/interface (default: ${SERVE_HOST})
-  --port PORT       Port to listen on (default: ${SERVE_PORT})
-  -h, --help        Show this help message
+  --host HOST             Host/interface (default: ${SERVE_HOST})
+  --port PORT             Port to listen on (default: ${SERVE_PORT})
+  --download              Force a fresh download of the model to the local folder
+  --continue-download     Resume a broken or incomplete download
+  -h, --help              Show this help message
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --host)    SERVE_HOST="$2"; shift 2 ;;
-    --host=*)  SERVE_HOST="${1#*=}"; shift ;;
-    --port)    SERVE_PORT="$2"; shift 2 ;;
-    --port=*)  SERVE_PORT="${1#*=}"; shift ;;
-    -h|--help) usage; exit 0 ;;
-    -*)        echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
+    --host)              SERVE_HOST="$2"; shift 2 ;;
+    --host=*)            SERVE_HOST="${1#*=}"; shift ;;
+    --port)              SERVE_PORT="$2"; shift 2 ;;
+    --port=*)            SERVE_PORT="${1#*=}"; shift ;;
+    --download)          FORCE_DOWNLOAD=true; shift ;;
+    --continue-download) CONTINUE_DOWNLOAD=true; shift ;;
+    -h|--help)           usage; exit 0 ;;
+    -*)                  echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
     *)
       if [[ -z "${MODEL_PATH}" ]]; then MODEL_PATH="$1"; else
         echo "Unexpected argument: $1" >&2; usage >&2; exit 1
@@ -46,28 +52,33 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-# --- SECTION TÉLÉCHARGEMENT ADAPTÉE POUR 'hf' ---
-if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ! -d "${DEFAULT_MODEL}" ]]; then
+# --- SECTION TÉLÉCHARGEMENT EXTENSIBLE (hf) ---
+# Se déclenche si le dossier n'existe pas, OU si l'utilisateur a explicitement demandé un téléchargement/reprise
+if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || "${FORCE_DOWNLOAD}" == true || "${CONTINUE_DOWNLOAD}" == true ) ]]; then
   echo "============================================================"
-  echo " 📥 Modèle local introuvable. Téléchargement depuis Hugging Face..."
-  echo " Repo:   ${HF_REPO}"
-  echo " Cible:  ${DEFAULT_MODEL}"
+  if [[ "${FORCE_DOWNLOAD}" == true ]]; then
+    echo " 📥 [FORCÉ] Re-téléchargement complet depuis Hugging Face..."
+  elif [[ "${CONTINUE_DOWNLOAD}" == true ]]; then
+    echo " 🔄 [REPRISE] Continuité d'un téléchargement interrompu..."
+  else
+    echo " 📥 Modèle local introuvable. Téléchargement initial depuis Hugging Face..."
+  fi
+  echo " Repo:    ${HF_REPO}"
+  echo " Cible:   ${DEFAULT_MODEL}"
   echo " Utility: hf (New CLI)"
   echo "============================================================"
   
-  # Vérification de la présence de la commande 'hf' globale ou dans l'environnement
   if ! command -v hf &> /dev/null; then
     echo "[DOWNLOAD][ERROR] La commande 'hf' n'a pas été trouvée dans votre PATH."
-    echo "                  Veuillez vérifier son installation en dehors du venv."
     exit 1
   fi
   
-  # Création du dossier cible pour éviter tout conflit de structure
   mkdir -p "${DEFAULT_MODEL}"
   
-  # Utilisation de la nouvelle CLI recommandée pour télécharger le dépôt entier
+  # Exécution du téléchargement via 'hf'
+  # Note : 'hf download' gère nativement la vérification des fichiers locaux existants
   hf download "${HF_REPO}" --local-dir "${DEFAULT_MODEL}"
-  echo "[DOWNLOAD][OK] Téléchargement terminé avec succès !"
+  echo "[DOWNLOAD][OK] Téléchargement terminé ou vérifié avec succès !"
 fi
 # ------------------------------------------------
 
