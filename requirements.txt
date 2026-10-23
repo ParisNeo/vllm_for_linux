@@ -1,0 +1,2 @@
+vllm==0.32.0
+vllm-omni @ git+https://github.com/vllm-project/vllm-omni.git@v0.32.0rc1
