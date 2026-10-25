@@ -52,19 +52,18 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-# --- SECTION TÉLÉCHARGEMENT CIBLÉ ET OPTIMISÉ (FP8 FL2VA uniquement) ---
+# --- SECTION TÉLÉCHARGEMENT ---
 if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || "${FORCE_DOWNLOAD}" == true || "${CONTINUE_DOWNLOAD}" == true ) ]]; then
   echo "============================================================"
   if [[ "${FORCE_DOWNLOAD}" == true ]]; then
-    echo " 📥 [FORCÉ] Re-téléchargement partiel FP8 depuis Hugging Face..."
+    echo " 📥 [FORCÉ] Re-téléchargement du modèle FP8 depuis Hugging Face..."
   elif [[ "${CONTINUE_DOWNLOAD}" == true ]]; then
-    echo " 🔄 [REPRISE] Continuité du téléchargement partiel interrompu..."
+    echo " 🔄 [REPRISE] Reprise du téléchargement..."
   else
-    echo " 📥 Modèle local introuvable. Téléchargement de la déclinaison FP8 (FL2VA)..."
+    echo " 📥 Modèle local introuvable. Téléchargement de MiniMax-H3-FP8..."
   fi
   echo " Repo:    ${HF_REPO}"
   echo " Cible:   ${DEFAULT_MODEL}"
-  echo " Filtre:  Index + Fichiers FL2VA (Text-to-Video)"
   echo "============================================================"
   
   if ! command -v hf &> /dev/null; then
@@ -74,9 +73,9 @@ if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || "${F
   
   mkdir -p "${DEFAULT_MODEL}"
   
-  # Le flag --include restreint le téléchargement au fichier global et au DiT FL2VA (évite le Ref2VA)
-  hf download "${HF_REPO}" --include "model_index.json" --include "*FL2VA*" --local-dir "${DEFAULT_MODEL}"
-  echo "[DOWNLOAD][OK] Téléchargement partiel FP8 complété !"
+  # Téléchargement complet du dépôt (nécessaire pour récupérer les configs + poids FP8)
+  hf download "${HF_REPO}" --local-dir "${DEFAULT_MODEL}"
+  echo "[DOWNLOAD][OK] Téléchargement complété !"
 fi
 # ------------------------------------------------
 
