@@ -75,7 +75,7 @@ if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || "${F
   mkdir -p "${DEFAULT_MODEL}"
   
   # Le flag --include restreint le téléchargement au fichier global et au DiT FL2VA (évite le Ref2VA)
-  hf download "${HF_REPO}" --include "model_index.json" "*FL2VA*" --local-dir "${DEFAULT_MODEL}"
+  hf download "${HF_REPO}" --include "model_index.json" --include "*FL2VA*" --local-dir "${DEFAULT_MODEL}"
   echo "[DOWNLOAD][OK] Téléchargement partiel FP8 complété !"
 fi
 # ------------------------------------------------
