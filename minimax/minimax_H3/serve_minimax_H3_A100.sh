@@ -53,11 +53,10 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
 fi
 
 # --- SECTION TÉLÉCHARGEMENT ---
-# Vérifie si le dossier est absent OU s'il existe mais est complètement vide
 if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || -z "$(ls -A "${DEFAULT_MODEL}" 2>/dev/null)" || "${FORCE_DOWNLOAD}" == true || "${CONTINUE_DOWNLOAD}" == true ) ]]; then
   echo "============================================================"
   if [[ "${FORCE_DOWNLOAD}" == true ]]; then
-    echo " 📥 [FORCÉ] Re-téléchargement du modèle FP8 depuis Hugging Face..."
+    echo " 📥 [FORCÉ] Re-téléchargement du modèle FP8..."
     rm -rf "${DEFAULT_MODEL}"/*
   elif [[ "${CONTINUE_DOWNLOAD}" == true ]]; then
     echo " 🔄 [REPRISE] Reprise du téléchargement..."
@@ -68,32 +67,24 @@ if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || -z "
   echo " Cible:   ${DEFAULT_MODEL}"
   echo "============================================================"
   
-  if ! command -v huggingface-cli &> /dev/null; then
-    echo "[DOWNLOAD][ERROR] La commande 'huggingface-cli' n'a pas été trouvée."
-    echo "[DOWNLOAD][ERROR] Installez-la via: pip install -U huggingface_hub"
-    exit 1
-  fi
-  
   mkdir -p "${DEFAULT_MODEL}"
-  
-  DL_ARGS=(
-    "${HF_REPO}"
-    --local-dir "${DEFAULT_MODEL}"
-    --local-dir-use-symlinks False
-  )
-  
-  if [[ -n "${HF_TOKEN:-}" ]]; then
-    DL_ARGS+=(--token "${HF_TOKEN}")
-  elif [[ -n "${HUGGING_FACE_HUB_TOKEN:-}" ]]; then
-    DL_ARGS+=(--token "${HUGGING_FACE_HUB_TOKEN}")
-  fi
-  
-  if huggingface-cli download "${DL_ARGS[@]}"; then
-    echo "[DOWNLOAD][OK] Téléchargement complété avec succès !"
-  else
-    echo "[DOWNLOAD][ERROR] Le téléchargement a échoué."
-    exit 1
-  fi
+
+  # Téléchargement robuste piloté par Python (affiche les barres de progression et les vraies erreurs)
+  python3 -c "
+from huggingface_hub import snapshot_download
+import sys
+try:
+    snapshot_download(
+        repo_id='${HF_REPO}',
+        local_dir='${DEFAULT_MODEL}',
+        local_dir_use_symlinks=False,
+        resume_download=True
+    )
+    print('[DOWNLOAD][OK] Téléchargement complété avec succès !')
+except Exception as e:
+    print(f'[DOWNLOAD][ERROR] Erreur fatale: {e}', file=sys.stderr)
+    sys.exit(1)
+  " || exit 1
 fi
 # ------------------------------------------------
 
