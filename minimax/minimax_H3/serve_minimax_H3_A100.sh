@@ -53,7 +53,8 @@ if [[ -f "${VENV_DIR}/bin/activate" ]]; then source "${VENV_DIR}/bin/activate"; 
 fi
 
 # --- SECTION TÉLÉCHARGEMENT ---
-if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || "${FORCE_DOWNLOAD}" == true || "${CONTINUE_DOWNLOAD}" == true ) ]]; then
+# Vérifie si le dossier est absent OU s'il existe mais est complètement vide
+if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || -z "$(ls -A "${DEFAULT_MODEL}" 2>/dev/null)" || "${FORCE_DOWNLOAD}" == true || "${CONTINUE_DOWNLOAD}" == true ) ]]; then
   echo "============================================================"
   if [[ "${FORCE_DOWNLOAD}" == true ]]; then
     echo " 📥 [FORCÉ] Re-téléchargement du modèle FP8 depuis Hugging Face..."
@@ -61,7 +62,7 @@ if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || "${F
   elif [[ "${CONTINUE_DOWNLOAD}" == true ]]; then
     echo " 🔄 [REPRISE] Reprise du téléchargement..."
   else
-    echo " 📥 Modèle local introuvable ou incomplet. Téléchargement de MiniMax-H3-FP8..."
+    echo " 📥 Dossier modèle vide ou introuvable. Téléchargement..."
   fi
   echo " Repo:    ${HF_REPO}"
   echo " Cible:   ${DEFAULT_MODEL}"
@@ -75,25 +76,22 @@ if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || "${F
   
   mkdir -p "${DEFAULT_MODEL}"
   
-  # Construction des arguments de téléchargement
   DL_ARGS=(
     "${HF_REPO}"
     --local-dir "${DEFAULT_MODEL}"
     --local-dir-use-symlinks False
   )
   
-  # Gestion d'un token Hugging Face optionnel (si variable d'environnement définie)
   if [[ -n "${HF_TOKEN:-}" ]]; then
     DL_ARGS+=(--token "${HF_TOKEN}")
   elif [[ -n "${HUGGING_FACE_HUB_TOKEN:-}" ]]; then
     DL_ARGS+=(--token "${HUGGING_FACE_HUB_TOKEN}")
   fi
   
-  # Lancement du téléchargement robuste
   if huggingface-cli download "${DL_ARGS[@]}"; then
     echo "[DOWNLOAD][OK] Téléchargement complété avec succès !"
   else
-    echo "[DOWNLOAD][ERROR] Le téléchargement a échoué. Vérifiez votre connexion ou vos droits d'accès au dépôt."
+    echo "[DOWNLOAD][ERROR] Le téléchargement a échoué."
     exit 1
   fi
 fi
