@@ -122,6 +122,8 @@ exec vllm serve "${MODEL_PATH}" \
   --tensor-parallel-size 1 \
   --max-model-len 4096 \
   --gpu-memory-utilization 0.90 \
+  --init-timeout 1200 \
+  --stage-init-timeout 1200 \
   --omni \
   --task-type fl2va \
   --trust-remote-code \
