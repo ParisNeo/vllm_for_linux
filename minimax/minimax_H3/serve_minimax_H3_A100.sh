@@ -57,25 +57,45 @@ if [[ "${MODEL_PATH}" == "${DEFAULT_MODEL}" && ( ! -d "${DEFAULT_MODEL}" || "${F
   echo "============================================================"
   if [[ "${FORCE_DOWNLOAD}" == true ]]; then
     echo " 📥 [FORCÉ] Re-téléchargement du modèle FP8 depuis Hugging Face..."
+    rm -rf "${DEFAULT_MODEL}"/*
   elif [[ "${CONTINUE_DOWNLOAD}" == true ]]; then
     echo " 🔄 [REPRISE] Reprise du téléchargement..."
   else
-    echo " 📥 Modèle local introuvable. Téléchargement de MiniMax-H3-FP8..."
+    echo " 📥 Modèle local introuvable ou incomplet. Téléchargement de MiniMax-H3-FP8..."
   fi
   echo " Repo:    ${HF_REPO}"
   echo " Cible:   ${DEFAULT_MODEL}"
   echo "============================================================"
   
-  if ! command -v hf &> /dev/null; then
-    echo "[DOWNLOAD][ERROR] La commande 'hf' n'a pas été trouvée dans votre PATH."
+  if ! command -v huggingface-cli &> /dev/null; then
+    echo "[DOWNLOAD][ERROR] La commande 'huggingface-cli' n'a pas été trouvée."
+    echo "[DOWNLOAD][ERROR] Installez-la via: pip install -U huggingface_hub"
     exit 1
   fi
   
   mkdir -p "${DEFAULT_MODEL}"
   
-  # Téléchargement complet du dépôt (nécessaire pour récupérer les configs + poids FP8)
-  hf download "${HF_REPO}" --local-dir "${DEFAULT_MODEL}"
-  echo "[DOWNLOAD][OK] Téléchargement complété !"
+  # Construction des arguments de téléchargement
+  DL_ARGS=(
+    "${HF_REPO}"
+    --local-dir "${DEFAULT_MODEL}"
+    --local-dir-use-symlinks False
+  )
+  
+  # Gestion d'un token Hugging Face optionnel (si variable d'environnement définie)
+  if [[ -n "${HF_TOKEN:-}" ]]; then
+    DL_ARGS+=(--token "${HF_TOKEN}")
+  elif [[ -n "${HUGGING_FACE_HUB_TOKEN:-}" ]]; then
+    DL_ARGS+=(--token "${HUGGING_FACE_HUB_TOKEN}")
+  fi
+  
+  # Lancement du téléchargement robuste
+  if huggingface-cli download "${DL_ARGS[@]}"; then
+    echo "[DOWNLOAD][OK] Téléchargement complété avec succès !"
+  else
+    echo "[DOWNLOAD][ERROR] Le téléchargement a échoué. Vérifiez votre connexion ou vos droits d'accès au dépôt."
+    exit 1
+  fi
 fi
 # ------------------------------------------------
 
