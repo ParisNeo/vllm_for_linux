@@ -10,8 +10,8 @@ FORCE_DOWNLOAD=false
 CONTINUE_DOWNLOAD=false
 
 # Configuration pour MiniMax-H3 Pré-quantifié FP8 (Unsloth)
-HF_REPO="unsloth/MiniMax-H3-FP8"
-DEFAULT_MODEL="${ROOT_DIR}/models/unsloth__MiniMax-H3-FP8"
+HF_REPO="ParisNeo/MiniMax-H3-FL2VA-FP8"
+DEFAULT_MODEL="${ROOT_DIR}/models/ParisNeo__MiniMax-H3-FL2VA-FP8"
 
 usage() {
   cat <<EOF
