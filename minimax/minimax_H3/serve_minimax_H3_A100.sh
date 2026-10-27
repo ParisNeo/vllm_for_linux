@@ -123,6 +123,7 @@ exec vllm serve "${MODEL_PATH}" \
   --max-model-len 4096 \
   --gpu-memory-utilization 0.90 \
   --omni \
+  --task-type fl2va \
   --vae-use-slicing \
   --vae-use-tiling \
   --enable-layerwise-offload \
