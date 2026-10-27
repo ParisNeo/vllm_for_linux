@@ -124,6 +124,7 @@ exec vllm serve "${MODEL_PATH}" \
   --gpu-memory-utilization 0.90 \
   --omni \
   --task-type fl2va \
+  --trust-remote-code \
   --vae-use-slicing \
   --vae-use-tiling \
   --enable-layerwise-offload \
