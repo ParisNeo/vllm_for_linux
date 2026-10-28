@@ -5,10 +5,9 @@ LoLLMs DeepSeek-V4.1-Flash Layer Pruning, LoRA Fine-Tuning & Analysis Pipeline
 1. Programmatically bootstraps and verifies requirements using pipmaster.
 2. Downloads a coding calibration dataset.
 3. Evaluates layer-wise input vs output cosine similarities.
-4. Ranks and prunes redundant layers.
-5. Saves the pruned model structure as 'lollms_deepseek_v4.1_flash'.
-6. Tests the pruned model, applies LoRA fine-tuning, and re-tests.
-7. Generates diagnostic plots via Matplotlib.
+4. Ranks and prunes redundant layers based on dynamic thresholds.
+5. Dynamically names the resulting model output directory based on pruning metrics.
+6. Tests the pruned model, applies LoRA fine-tuning, re-tests, and plots.
 """
 
 import sys
@@ -23,7 +22,6 @@ def ensure_environment():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pipmaster"])
         import pipmaster as pm
 
-    # Declarative dependencies required by this script
     required_packages = [
         "torch",
         "transformers>=4.38.0",
@@ -36,7 +34,6 @@ def ensure_environment():
     print("[*] Verifying environment packages with pipmaster...")
     pm.ensure_packages(required_packages, verbose=True)
 
-# Run dependency auto-check and installation
 ensure_environment()
 # ---------------------------------
 
@@ -51,11 +48,10 @@ from peft import LoraConfig, get_peft_model, TaskType
 
 # Configuration Parameters
 MODEL_ID = "deepseek-ai/DeepSeek-V4.1-Flash"
-OUTPUT_DIR = "./lollms_deepseek_v4.1_flash"
 CALIB_DATASET = "bigcode/the-stack-smol"
 NUM_CALIB_SAMPLES = 64
 MAX_LENGTH = 512
-PRUNING_RATIO = 0.15  # Remove bottom 15% most redundant layers
+PRUNING_RATIO = 0.15  # Target 15% pruning
 
 def compute_layer_similarities(model, tokenizer, dataloader, device):
     """Hooks into model layers to compute input vs output cosine similarities."""
@@ -125,6 +121,14 @@ def main():
         trust_remote_code=True
     )
 
+    # Determine total base layers dynamically
+    base_layers = []
+    if hasattr(model, "model") and hasattr(model.model, "layers"):
+        base_layers = model.model.layers
+    elif hasattr(model, "transformer") and hasattr(model.transformer, "h"):
+        base_layers = model.transformer.h
+    total_original_layers = len(base_layers)
+
     # 2. Load Coding Calibration Dataset
     print(f"[*] Downloading calibration database ({CALIB_DATASET})...")
     dataset = load_dataset(CALIB_DATASET, data_files={"train": "data/python/0000.parquet"}, split="train", streaming=True)
@@ -143,19 +147,29 @@ def main():
     similarities = compute_layer_similarities(model, tokenizer, dataloader, device)
     
     sorted_layers = sorted(similarities.items(), key=lambda x: x[1])
-    print("\n[+] Layer Cosine Similarity Rankings (Lowest change -> Highest change):")
-    for idx, score in sorted_layers:
-        print(f"    Layer {idx:2d}: Cosine Similarity = {score:.5f}")
-
-    num_layers_to_remove = int(len(sorted_layers) * PRUNING_RATIO)
+    num_layers_to_remove = int(total_original_layers * PRUNING_RATIO)
     layers_to_prune = [idx for idx, score in sorted_layers[:num_layers_to_remove]]
-    print(f"\n[+] Pruning {num_layers_to_remove} redundant layers: {sorted(layers_to_prune)}")
+    
+    # Calculate exact achieved pruning metrics
+    actual_pruned_count = len(layers_to_prune)
+    actual_pruning_percentage = int(round((actual_pruned_count / total_original_layers) * 100))
+    remaining_layers_count = total_original_layers - actual_pruned_count
 
-    # 4. Reconstruct / Build New lollms_deepseek_v4.1_flash Model Structure
-    print(f"[*] Slicing and building new model: {OUTPUT_DIR}")
+    # --- DYNAMIC NAMING MECHANISM ---
+    # Pattern: lollms_deepseek_v4.1_flash_p{prune_pct}_L{remaining_layers}
+    output_model_name = f"lollms_deepseek_v4.1_flash_p{actual_pruning_percentage}_L{remaining_layers_count}"
+    OUTPUT_DIR = os.path.join(".", output_model_name)
+    
+    print(f"\n[+] Dynamic Naming Generated:")
+    print(f"    - Original Layers: {total_original_layers}")
+    print(f"    - Pruned Layers:   {actual_pruned_count} ({actual_pruning_percentage}%)")
+    print(f"    - Remaining Active Layers: {remaining_layers_count}")
+    print(f"    - Target Directory: {OUTPUT_DIR}\n")
+
+    # 4. Reconstruct / Build New Model Structure
+    print(f"[*] Slicing and building new model structure...")
     if hasattr(model, "model") and hasattr(model.model, "layers"):
-        original_layers = model.model.layers
-        filtered_layers = torch.nn.ModuleList([layer for idx, layer in enumerate(original_layers) if idx not in layers_to_prune])
+        filtered_layers = torch.nn.ModuleList([layer for idx, layer in enumerate(model.model.layers) if idx not in layers_to_prune])
         model.model.layers = filtered_layers
         if hasattr(model.config, "num_hidden_layers"):
             model.config.num_hidden_layers = len(filtered_layers)
@@ -173,10 +187,10 @@ def main():
     plt.axhline(y=sum(scores)/len(scores), color='black', linestyle='--', label='Average Similarity')
     plt.xlabel("Transformer Layer Index")
     plt.ylabel("Input vs Output Cosine Similarity")
-    plt.title("LoLLMs DeepSeek-V4.1-Flash: Layer Redundancy Analysis & Pruning Strategy")
+    plt.title(f"LoLLMs DeepSeek-V4.1-Flash: Pruned {actual_pruning_percentage}% ({remaining_layers_count} Layers Left)")
     plt.legend()
     plt.grid(True, alpha=0.3)
-    plot_path = os.path.join(OUTPUT_DIR, "layer_similarity_ranking.png")
+    plot_path = os.path.join(OUTPUT_DIR, f"layer_similarity_ranking_p{actual_pruning_percentage}.png")
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     print(f"[+] Diagnostic ranking plot saved to {plot_path}")
 
