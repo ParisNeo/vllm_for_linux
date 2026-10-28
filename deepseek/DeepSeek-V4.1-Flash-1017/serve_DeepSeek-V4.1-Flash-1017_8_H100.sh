@@ -105,7 +105,7 @@ import torch
 if torch.cuda.device_count() < 8:
     print(f"[ERROR] Expected 8 GPUs, but torch detected only {torch.cuda.device_count()}.")
     exit(1)
-for i in range(8]:
+for i in range(8):
     free_mem = torch.cuda.mem_get_info(i)[0] / (1024**3)
     print(f"  - GPU {i}: {free_mem:.2f} GB free VRAM")
 EOF
