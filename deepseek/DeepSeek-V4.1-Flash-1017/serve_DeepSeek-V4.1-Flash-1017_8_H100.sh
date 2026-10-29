@@ -46,6 +46,89 @@ else
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
+# Derive the HF repo id from a local models/<org>__<repo> path, or pass through.
+resolve_repo_id() {
+  local path_or_repo="$1"
+  local models_prefix="${ROOT_DIR}/models/"
+  if [[ "${path_or_repo}" == "${models_prefix}"* ]]; then
+    local base
+    base="$(basename "${path_or_repo}")"
+    echo "${base/__//}"
+  else
+    echo "${path_or_repo}"
+  fi
+}
+
+# Ensure the model lives at MODEL_PATH (flat layout, config.json at root).
+# 1) Already present -> no-op.
+# 2) HF cache snapshot exists -> materialize via snapshot_download(local_dir=...)
+#    (hardlinks from cache, no network) with cp -a -L fallback for offline salvage.
+# 3) Otherwise -> download straight into MODEL_PATH.
+ensure_model_local() {
+  local model_path="$1"
+  local repo_id
+  repo_id="$(resolve_repo_id "${model_path}")"
+
+  if [[ -f "${model_path}/config.json" ]]; then
+    echo "[AUTO-DOWNLOAD][OK] Verified local model files at ${model_path}"
+    return 0
+  fi
+
+  echo "[AUTO-DOWNLOAD] Model not found at '${model_path}' (repo: ${repo_id})."
+  mkdir -p "${model_path}"
+
+  # Primary path: snapshot_download with local_dir -> flat layout, reuses cache blobs.
+  if python3 - "${repo_id}" "${model_path}" <<'PY'
+import sys
+from huggingface_hub import snapshot_download
+
+repo_id, local_dir = sys.argv[1], sys.argv[2]
+print(f"[*] Materializing '{repo_id}' into '{local_dir}' (reuses HF cache when available)...")
+snapshot_download(
+    repo_id=repo_id,
+    local_dir=local_dir,
+    local_dir_use_symlinks=False,
+    ignore_patterns=["*.msgpack", "*.h5"],
+    resume_download=True,
+)
+PY
+  then
+    if [[ -f "${model_path}/config.json" ]]; then
+      echo "[AUTO-DOWNLOAD][OK] Model materialized at ${model_path}"
+      return 0
+    fi
+  else
+    echo "[AUTO-DOWNLOAD][WARN] snapshot_download failed; attempting offline cache salvage..." >&2
+  fi
+
+  # Fallback: salvage an existing HF cache snapshot by dereferencing symlinks.
+  local hf_home="${HF_HOME:-${HOME}/.cache/huggingface}"
+  local cache_dir="${hf_home}/hub/models--${repo_id//\//--}"
+  local snapshot_dir=""
+  if [[ -d "${cache_dir}/snapshots" ]]; then
+    snapshot_dir="$(find "${cache_dir}/snapshots" -mindepth 1 -maxdepth 1 -type d | head -n 1 || true)"
+  fi
+
+  if [[ -n "${snapshot_dir}" && -d "${snapshot_dir}" ]]; then
+    echo "[AUTO-DOWNLOAD] Salvaging cache snapshot: ${snapshot_dir}"
+    if cp -a -L "${snapshot_dir}/." "${model_path}/"; then
+      if [[ -f "${model_path}/config.json" ]]; then
+        echo "[AUTO-DOWNLOAD][OK] Salvaged model into ${model_path}"
+        echo "[AUTO-DOWNLOAD] Old cache dir can be removed: ${cache_dir}"
+        return 0
+      fi
+    fi
+    echo "[AUTO-DOWNLOAD][ERROR] Salvage copy did not produce config.json" >&2
+  fi
+
+  echo "[AUTO-DOWNLOAD][ERROR] Unable to obtain model at ${model_path}" >&2
+  return 1
+}
+
+if ! ensure_model_local "${MODEL_PATH}"; then
+  exit 1
+fi
+
 # Lock vLLM across all 8 H100 GPUs
 export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
@@ -60,44 +143,6 @@ echo " Target Arch: 8x H100 80GB (Tensor Parallel size: 8)"
 echo " Model:       ${MODEL_PATH}"
 echo " Endpoint:    ${SERVE_HOST}:${SERVE_PORT}"
 echo "============================================================"
-
-# Auto-download Check & HF Resolution
-if [[ ! -d "${MODEL_PATH}" ]]; then
-  echo "[AUTO-DOWNLOAD] Path '${MODEL_PATH}' not found locally."
-  
-  HF_REPO="${MODEL_PATH}"
-  if [[ "${MODEL_PATH}" == *"/models/deepseek-ai__"* ]]; then
-    HF_REPO="deepseek-ai/DeepSeek-V4.1-Flash-1017"
-  fi
-
-  echo "[AUTO-DOWNLOAD] Pulling '${HF_REPO}' via huggingface_hub..."
-  python3 - <<EOF
-import sys
-from huggingface_hub import snapshot_download
-
-model_id = "${HF_REPO}"
-print(f"[*] Downloading repository: {model_id} (this may take a while for large model sizes)...")
-try:
-    local_path = snapshot_download(
-        repo_id=model_id,
-        ignore_patterns=["*.msgpack", "*.h5"]
-    )
-    print(f"[+] Download complete. Snapshot cache: {local_path}")
-    with open("/tmp/resolved_ds_v41_path.txt", "w") as f:
-        f.write(local_path)
-except Exception as e:
-    print(f"[-] Download failed: {e}", file=sys.stderr)
-    sys.exit(1)
-EOF
-
-  if [[ -f /tmp/resolved_ds_v41_path.txt ]]; then
-    MODEL_PATH="$(cat /tmp/resolved_ds_v41_path.txt)"
-    rm -f /tmp/resolved_ds_v41_path.txt
-    echo "[AUTO-DOWNLOAD][OK] Set MODEL_PATH to: ${MODEL_PATH}"
-  fi
-else
-  echo "[AUTO-DOWNLOAD][OK] Verified local model files at ${MODEL_PATH}"
-fi
 
 echo "[PRE-FLIGHT] Verifying aggregate memory across 8x H100 nodes..."
 python3 - <<EOF
