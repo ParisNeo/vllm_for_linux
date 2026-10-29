@@ -163,7 +163,7 @@ exec vllm serve "${MODEL_PATH}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 8 \
   --tokenizer-mode deepseek_v41 \
-  --max-model-len 131072 \
+  --max-model-len 256000 \
   --max-num-seqs 128 \
   --gpu-memory-utilization 0.94 \
   --enable-prefix-caching \
