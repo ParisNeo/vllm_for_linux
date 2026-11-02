@@ -172,4 +172,5 @@ exec vllm serve "${MODEL_PATH}" \
   --max-num-seqs 32 \
   --gpu-memory-utilization 0.97 \
   --enable-prefix-caching \
+  --tokenizer-mode auto \
   --trust-remote-code
