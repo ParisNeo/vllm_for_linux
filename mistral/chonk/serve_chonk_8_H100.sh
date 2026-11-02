@@ -8,8 +8,9 @@ SERVE_PORT="${PORT:-8000}"
 MODEL_PATH=""
 DOWNLOAD_ONLY=false
 
-# Dépôt officiel exact pour Mistral Large 4 au format NVIDIA FP4 ("Le Chonk")
+# Official Hugging Face repository and local target directory
 DEFAULT_MODEL="${ROOT_DIR}/models/mistralai__Mistral-Large-4-1T-A52B-NVFP4"
+DEFAULT_REPO_ID="mistralai/Mistral-Large-4-1T-A52B-NVFP4"
 
 usage() {
   cat <<EOF
@@ -50,95 +51,59 @@ else
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-# Déduction correcte du repo ID Hugging Face à partir de l'arborescence locale
-resolve_repo_id() {
-  local path_or_repo="$1"
-  local base
-  base="$(basename "${path_or_repo}")"
-  # Si le nom contient "__", on le convertit en format org/repo (ex: mistralai__Mistral-... -> mistralai/Mistral-...)
-  if [[ "${base}" == *__* ]]; then
-    echo "${base/__//}"
-  else
-    echo "${path_or_repo}"
-  fi
-}
-
-# Assure le téléchargement et le déploiement local flat-layout du modèle 1T
+# Ensure model files exist and download via Hugging Face Hub if missing
 ensure_model_local() {
   local model_path="$1"
-  local repo_id
-  repo_id="$(resolve_repo_id "${model_path}")"
 
-  if [[ -f "${model_path}/config.json" ]]; then
+  if [[ -f "${model_path}/config.json" ]] && [[ -f "${model_path}/params.json" ]]; then
     echo "[AUTO-DOWNLOAD][OK] Verified local model files at ${model_path}"
     return 0
   fi
 
-  echo "[AUTO-DOWNLOAD] Model not found at '${model_path}' (resolved repo: ${repo_id})."
+  echo "[AUTO-DOWNLOAD] Model weights or configuration missing at '${model_path}'."
+  echo "[AUTO-DOWNLOAD] Pulling fresh official release for ${DEFAULT_REPO_ID}..."
   mkdir -p "${model_path}"
 
-  # Téléchargement via Hugging Face Hub
-  if python3 - "${repo_id}" "${model_path}" <<'PY'
+  python3 - "${DEFAULT_REPO_ID}" "${model_path}" <<'PY'
 import sys
 from huggingface_hub import snapshot_download
 
 repo_id, local_dir = sys.argv[1], sys.argv[2]
-print(f"[*] Materializing '{repo_id}' into '{local_dir}' (fetching official NVFP4 Chonk)...")
+print(f"[*] Downloading '{repo_id}' into '{local_dir}'...")
 snapshot_download(
     repo_id=repo_id,
     local_dir=local_dir,
     local_dir_use_symlinks=False,
     ignore_patterns=["*.msgpack", "*.h5"],
-    resume_download=True,
 )
 PY
-  then
-    if [[ -f "${model_path}/config.json" ]]; then
-      echo "[AUTO-DOWNLOAD][OK] Model materialized at ${model_path}"
-      return 0
-    fi
+
+  if [[ -f "${model_path}/config.json" ]]; then
+    echo "[AUTO-DOWNLOAD][OK] Model successfully materialized at ${model_path}"
+    return 0
   else
-    echo "[AUTO-DOWNLOAD][WARN] snapshot_download failed; attempting offline cache salvage..." >&2
+    echo "[AUTO-DOWNLOAD][ERROR] Failed to obtain valid model configuration at ${model_path}" >&2
+    return 1
   fi
-
-  # Procédure de secours en cas de cache d'arborescence partagé (symlink resolution)
-  local hf_home="${HF_HOME:-${HOME}/.cache/huggingface}"
-  local cache_dir="${hf_home}/hub/models--${repo_id//\//--}"
-  local snapshot_dir=""
-  if [[ -d "${cache_dir}/snapshots" ]]; then
-    snapshot_dir="$(find "${cache_dir}/snapshots" -mindepth 1 -maxdepth 1 -type d | head -n 1 || true)"
-  fi
-
-  if [[ -n "${snapshot_dir}" && -d "${snapshot_dir}" ]]; then
-    echo "[AUTO-DOWNLOAD] Salvaging cache snapshot: ${snapshot_dir}"
-    if cp -a -L "${snapshot_dir}/." "${model_path}/"; then
-      if [[ -f "${model_path}/config.json" ]]; then
-        echo "[AUTO-DOWNLOAD][OK] Salvaged model into ${model_path}"
-        return 0
-      fi
-    fi
-  fi
-
-  echo "[AUTO-DOWNLOAD][ERROR] Unable to obtain model at ${model_path}" >&2
-  return 1
 }
 
 if ! ensure_model_local "${MODEL_PATH}"; then
   exit 1
 fi
 
-# Interruption immédiate si le mode download-only est activé
 if [[ "${DOWNLOAD_ONLY}" == true ]]; then
-  echo "[DOWNLOAD-ONLY] Model is fully downloaded and verified at ${MODEL_PATH}. Exiting as requested."
+  echo "[DOWNLOAD-ONLY] Model is fully verified at ${MODEL_PATH}. Exiting."
   exit 0
 fi
 
-# Verrouillage de la topologie matérielle pour l'architecture Hopper (8x H100)
+# Hardware topology & runtime environment locks for 8x H100
 export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
 export FLASHINFER_DISABLE_VERSION_CHECK=1
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
 
 echo "============================================================"
 echo " ▶️ vLLM Cluster Launcher: Mistral Large 4 (Le Chonk)"
@@ -162,7 +127,7 @@ EOF
 echo "[PRE-FLIGHT] Clearing CUDA memory caches..."
 python3 -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
-# Serveur vLLM optimisé pour le décodage matériel NVFP4 Hopper natif
+# Production vLLM serve invocation with official Mistral parsing flags
 exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
@@ -172,5 +137,7 @@ exec vllm serve "${MODEL_PATH}" \
   --max-num-seqs 32 \
   --gpu-memory-utilization 0.97 \
   --enable-prefix-caching \
-  --tokenizer-mode auto \
+  --tool-call-parser mistral \
+  --reasoning-parser mistral \
+  --enable-auto-tool-choice \
   --trust-remote-code
