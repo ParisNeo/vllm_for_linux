@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
     --port=*) SERVE_PORT="${1#*=}"; shift ;;
     -d|--download-only) DOWNLOAD_ONLY=true; shift ;;
     -h|--help) usage; exit 0 ;;
-    -*)        echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
+    -*)       echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
     *)
       if [[ -z "${MODEL_PATH}" ]]; then MODEL_PATH="$1"; else
         echo "Unexpected argument: $1" >&2; usage >&2; exit 1
@@ -50,13 +50,13 @@ else
   echo "Virtual environment not found at ${VENV_DIR}" >&2; exit 1
 fi
 
-# Déduction du repo ID Hugging Face à partir de l'arborescence locale
+# Déduction correcte du repo ID Hugging Face à partir de l'arborescence locale
 resolve_repo_id() {
   local path_or_repo="$1"
-  local models_prefix="${ROOT_DIR}/models/"
-  if [[ "${path_or_repo}" == "${models_prefix}"* ]]; then
-    local base
-    base="$(basename "${path_or_repo}")"
+  local base
+  base="$(basename "${path_or_repo}")"
+  # Si le nom contient "__", on le convertit en format org/repo (ex: mistralai__Mistral-... -> mistralai/Mistral-...)
+  if [[ "${base}" == *__* ]]; then
     echo "${base/__//}"
   else
     echo "${path_or_repo}"
@@ -74,10 +74,10 @@ ensure_model_local() {
     return 0
   fi
 
-  echo "[AUTO-DOWNLOAD] Model not found at '${model_path}' (repo: ${repo_id})."
+  echo "[AUTO-DOWNLOAD] Model not found at '${model_path}' (resolved repo: ${repo_id})."
   mkdir -p "${model_path}"
 
-  # Téléchargement via Hugging Face Hub (Slices NVFP4 de 610 Go au total)
+  # Téléchargement via Hugging Face Hub
   if python3 - "${repo_id}" "${model_path}" <<'PY'
 import sys
 from huggingface_hub import snapshot_download
@@ -138,7 +138,6 @@ export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
 export FLASHINFER_DISABLE_VERSION_CHECK=1
-# Initialiser 1T de poids répartis sur 8 cartes (MoE) nécessite un très long délai d'attente
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
 
 echo "============================================================"
@@ -168,7 +167,7 @@ exec vllm serve "${MODEL_PATH}" \
   --host "${SERVE_HOST}" \
   --port "${SERVE_PORT}" \
   --tensor-parallel-size 8 \
-  --quantization fp4 \
+  --quantization nvfp4 \
   --max-model-len 32000 \
   --max-num-seqs 32 \
   --gpu-memory-utilization 0.97 \
