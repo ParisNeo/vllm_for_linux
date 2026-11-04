@@ -87,5 +87,7 @@ exec vllm serve "${MODEL_PATH}" \
   --enable-prefix-caching \
   --trust-remote-code \
   --reasoning-parser qwen3 \
+  --enable-auto-tool-choice \
+  --tool-call-parser qwen3_xml \
   --default-chat-template-kwargs '{"enable_thinking": false}' \
   --limit-mm-per-prompt '{"image": 4}'
