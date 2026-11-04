@@ -170,5 +170,5 @@ exec vllm serve "${MODEL_PATH}" \
   --trust-remote-code \
   --reasoning-parser deepseek_r1 \
   --enable-auto-tool-choice \
-  --tool-call-parser deepseek_v4 \
+  --tool-call-parser deepseek_v41 \
   --default-chat-template-kwargs '{"enable_thinking": true}'
