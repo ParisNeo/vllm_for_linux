@@ -167,7 +167,6 @@ exec vllm serve "${MODEL_PATH}" \
   --max-num-seqs 128 \
   --gpu-memory-utilization 0.94 \
   --enable-prefix-caching \
-  --trust-remote-code \
   --reasoning-parser deepseek_r1 \
   --enable-auto-tool-choice \
   --tool-call-parser deepseek_v41 \
